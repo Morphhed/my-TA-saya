@@ -6,6 +6,24 @@ Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan ars
 
 ---
 
+[config.py]
+- BATCH_SIZE : Ukuran batch data yang diproses.
+- EPOCHS : Berapa kali model melihat keseluruhan dataset.
+- LEARNING_RATE : Kecepatan model dalam belajar/mengubah bobot.
+- PATCH_SIZE : Ukuran potongan gambar asli.
+
+[model.py]
+- projection_dim : Dimensi output dari projection head (standar: 128).
+- temperature : Parameter tingkat penolakan gambar negatif pada NTXentLoss (standar: 0.5).
+
+[train.py]
+- weight_decay : Regularisasi untuk mencegah overfitting pada optim.Adam (standar: 1e-6).
+
+[dataset.py]
+- Augmentasi data : Kekuatan dan probabilitas augmentasi (contoh: brightness=0.4, p=0.8 pada ColorJitter, atau ukuran blur pada GaussianBlur).
+
+---
+
 ## Tahap 1: Persiapan Dataset (Manual)
 Sebelum menjalankan kode apa pun, pastikan dataset dari kompetisi Kaggle sudah dibersihkan:
 * Pindahkan isi folder `additional_Type_1_v2`, `additional_Type_2_v2`, dan `additional_Type_3_v2` ke dalam folder `train/train/Type_1`, `Type_2`, dan `Type_3`. Jika ada peringatan nama file ganda, pilih **"Keep Both"**.
@@ -43,21 +61,3 @@ source .venv/bin/activate
     ```bash
     python train.py
     ```
-
----
-
-[config.py]
-- BATCH_SIZE : Ukuran batch data yang diproses.
-- EPOCHS : Berapa kali model melihat keseluruhan dataset.
-- LEARNING_RATE : Kecepatan model dalam belajar/mengubah bobot.
-- PATCH_SIZE : Ukuran potongan gambar asli.
-
-[model.py]
-- projection_dim : Dimensi output dari projection head (standar: 128).
-- temperature : Parameter tingkat penolakan gambar negatif pada NTXentLoss (standar: 0.5).
-
-[train.py]
-- weight_decay : Regularisasi untuk mencegah overfitting pada optim.Adam (standar: 1e-6).
-
-[dataset.py]
-- Augmentasi data : Kekuatan dan probabilitas augmentasi (contoh: brightness=0.4, p=0.8 pada ColorJitter, atau ukuran blur pada GaussianBlur).
