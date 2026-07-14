@@ -5,6 +5,7 @@
 Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan arsitektur ResNet50 untuk mengekstrak fitur dari gambar medis sebelum dilakukan *fine-tuning* untuk klasifikasi. Dikembangkan dan dioptimalkan untuk berjalan di lingkungan WSL2 (Windows Subsystem for Linux).
 
 ---
+## Tuneable Hyperparameter
 
 [config.py]
 - BATCH_SIZE : Ukuran batch data yang diproses.
@@ -38,9 +39,10 @@ Pastikan file `config.py` sudah menggunakan path format Linux (WSL2), bukan part
 ## Tahap 3: Menjalankan Proyek
 
 Buka terminal di dalam VS Code (pastikan berada di sistem operasi Ubuntu/WSL2) dan aktifkan *environment*:
+
 ```bash
 source .venv/bin/activate
-
+```
 ---
 
 # Urutan Eksekusi Skrip (Dijalankan di Terminal)
