@@ -36,7 +36,7 @@ class NTXentLoss(nn.Module):
         similarity_matrix = torch.matmul(z, z.T)
         
         labels = torch.arange(batch_size).to(self.device)
-        labels = torch.cat([labels + batch_size, labels], dim=0)
+        labels = torch.cat([labels + batch_size - 1, labels], dim=0)
         
         mask = torch.eye(2 * batch_size, dtype=torch.bool).to(self.device)
         similarity_matrix = similarity_matrix[~mask].view(2 * batch_size, -1)
