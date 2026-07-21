@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
+from torchvision import datasets
+from torch.utils.data import DataLoader, random_split
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
@@ -21,8 +21,15 @@ def plot_confusion_matrix(device, model_path):
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
     
-    full_dataset = datasets.ImageFolder(root=RAW_DATA_DIR, transform=get_finetune_transforms(is_training=False))
-    dataloader = DataLoader(full_dataset, batch_size=16, shuffle=False)
+    # Memuat data validasi murni (20%) dengan seed yang sama seperti finetune.py
+    val_full = datasets.ImageFolder(root=RAW_DATA_DIR, transform=get_finetune_transforms(is_training=False))
+    train_size = int(0.8 * len(val_full))
+    val_size = len(val_full) - train_size
+    
+    generator = torch.Generator().manual_seed(42)
+    _, val_dataset = random_split(val_full, [train_size, val_size], generator=generator)
+    
+    dataloader = DataLoader(val_dataset, batch_size=16, shuffle=False)
     
     all_preds = []
     all_labels = []
@@ -35,13 +42,13 @@ def plot_confusion_matrix(device, model_path):
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
             
-    #Plotting
+    # Plotting
     cm = confusion_matrix(all_labels, all_preds)
     plt.figure(figsize=(8,6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                xticklabels=full_dataset.classes, 
-                yticklabels=full_dataset.classes)
-    plt.title('Confusion Matrix - Hasil Klasifikasi Kanker Serviks')
+                xticklabels=val_full.classes, 
+                yticklabels=val_full.classes)
+    plt.title('Confusion Matrix - Hasil Klasifikasi Kanker Serviks (Data Validasi)')
     plt.ylabel('Label Sebenarnya')
     plt.xlabel('Prediksi Model')
     plt.show()
@@ -88,4 +95,4 @@ if __name__ == "__main__":
         if os.path.exists(sample_image):
             generate_gradcam(device, final_model_path, sample_image, target_class=0)
     else:
-        print("Model belum dilatih! Jalankan train_finetune.py terlebih dahulu.")
+        print("Model belum dilatih! Jalankan finetune.py terlebih dahulu.")

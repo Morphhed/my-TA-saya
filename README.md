@@ -8,29 +8,29 @@ Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan ars
 ## Tuneable Hyperparameter
 
 [config.py]
-- BATCH_SIZE : Ukuran batch data yang diproses pada tahap pre-training SimCLR.
-- EPOCHS : Berapa kali model melihat keseluruhan dataset pada tahap pre-training.
-- LEARNING_RATE : Kecepatan model dalam belajar/mengubah bobot pada tahap pre-training.
-- PATCH_SIZE : Ukuran potongan gambar asli.
+- BATCH_SIZE : Ukuran batch data pada pre-training SimCLR (default: 16).
+- EPOCHS : Jumlah epoch pada pre-training SimCLR (default: 100).
+- LEARNING_RATE : Kecepatan belajar pada pre-training SimCLR (default: 1e-3).
+- PATCH_SIZE : Ukuran potongan gambar asli (default: 256).
 
 [model.py]
-- projection_dim : Dimensi output dari projection head (standar: 128).
-- temperature : Parameter tingkat penolakan gambar negatif pada NTXentLoss (standar: 0.5).
+- projection_dim : Dimensi output dari projection head (default: 128).
+- temperature : Parameter tingkat penolakan gambar negatif pada NTXentLoss (default: 0.5).
 
 [train.py]
-- weight_decay : Regularisasi untuk mencegah overfitting pada optim.Adam (standar: 1e-6).
+- weight_decay : Regularisasi untuk mencegah overfitting pada optim.Adam (default: 1e-6).
 
 [dataset.py]
-- Augmentasi data : Kekuatan dan probabilitas augmentasi (contoh: brightness=0.4, p=0.8 pada ColorJitter, atau ukuran blur pada GaussianBlur).
+- Augmentasi data : Kekuatan dan probabilitas augmentasi SimCLR (contoh: brightness=0.4, p=0.8 pada ColorJitter, kernel_size=9 pada GaussianBlur, serta proporsi crop 0.2-1.0).
 
 [finetune.py]
-- FT_BATCH_SIZE : Ukuran batch data khusus untuk tahap fine-tuning/klasifikasi.
-- FT_EPOCHS : Jumlah epoch untuk tahap fine-tuning.
-- FT_LR : Learning rate khusus untuk tahap fine-tuning.
+- FT_BATCH_SIZE : Ukuran batch data khusus untuk tahap fine-tuning/klasifikasi (default: 16).
+- FT_EPOCHS : Jumlah epoch untuk tahap fine-tuning (default: 15).
+- FT_LR : Learning rate khusus untuk tahap fine-tuning (default: 1e-4).
 - USE_SSL_WEIGHTS : Pengaturan A/B Testing (True = Menggunakan bobot pre-trained SimCLR, False = Baseline ImageNet).
 
 [preprocess.py]
-- threshold background : Nilai batas (contoh: 240) untuk membuang patch gambar yang dominan putih atau kosong.
+- threshold background : Nilai batas (default: 240) untuk membuang patch gambar yang dominan putih atau kosong.
 
 ---
 

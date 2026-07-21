@@ -60,15 +60,20 @@ def main():
     
     # Memuat dataset utuh dari RAW_DATA_DIR (yang berisi folder Type_1, Type_2, Type_3)
     full_dataset = datasets.ImageFolder(root=RAW_DATA_DIR)
-    
+
+    # 2 instance terpisah untuk train (dengan augmentasi) dan val (tanpa augmentasi)
+    train_full = datasets.ImageFolder(root=RAW_DATA_DIR, transform=get_finetune_transforms(is_training=True))
+    val_full = datasets.ImageFolder(root=RAW_DATA_DIR, transform=get_finetune_transforms(is_training=False))
+
     # Pembagian 80% Latih, 20% Validasi
     train_size = int(0.8 * len(full_dataset))
     val_size = len(full_dataset) - train_size
-    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
-
-    # Terapkan transformasi
-    train_dataset.dataset.transform = get_finetune_transforms(is_training=True)
-    val_dataset.dataset.transform = get_finetune_transforms(is_training=False)
+    
+    # Kunci seed generator agar indeks pembagian 80/20 selalu konsisten dan dapat direplikasi
+    generator = torch.Generator().manual_seed(42)
+    
+    train_dataset, _ = random_split(train_full, [train_size, val_size], generator=generator)
+    _, val_dataset = random_split(val_full, [train_size, val_size], generator=generator)
 
     train_loader = DataLoader(train_dataset, batch_size=FT_BATCH_SIZE, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=FT_BATCH_SIZE, shuffle=False, num_workers=0)
