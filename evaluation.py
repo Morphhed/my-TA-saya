@@ -26,7 +26,7 @@ def plot_confusion_matrix(device, model_path):
     train_size = int(0.8 * len(val_full))
     val_size = len(val_full) - train_size
     
-    generator = torch.Generator().manual_seed(42)
+    generator = torch.Generator().manual_seed(67)
     _, val_dataset = random_split(val_full, [train_size, val_size], generator=generator)
     
     dataloader = DataLoader(val_dataset, batch_size=16, shuffle=False)

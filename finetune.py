@@ -70,7 +70,7 @@ def main():
     val_size = len(full_dataset) - train_size
     
     # Kunci seed generator agar indeks pembagian 80/20 selalu konsisten dan dapat direplikasi
-    generator = torch.Generator().manual_seed(42)
+    generator = torch.Generator().manual_seed(67)
     
     train_dataset, _ = random_split(train_full, [train_size, val_size], generator=generator)
     _, val_dataset = random_split(val_full, [train_size, val_size], generator=generator)
