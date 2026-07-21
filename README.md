@@ -85,7 +85,7 @@ Pastikan Anda sudah mengaktifkan *virtual environment* (misal: `source .venv/bin
 
 ```bash
 pip install torch torchvision scikit-learn opencv-python Pillow numpy matplotlib seaborn grad-cam
-
+```
 ---
 
 # Urutan Eksekusi Skrip (Dijalankan di Terminal)
