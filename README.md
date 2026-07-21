@@ -54,11 +54,45 @@ source .venv/bin/activate
 ```
 ---
 
+## Persyaratan Sistem dan Library
+
+Proyek ini membutuhkan beberapa pustaka (library) eksternal berbasis Python. Berikut adalah daftar library yang digunakan beserta fungsinya:
+
+### 1. Deep Learning & Machine Learning
+* **PyTorch** (`torch`): Framework utama untuk membangun model, mendefinisikan *loss function*, dan menjalankan proses pelatihan.
+* **Torchvision** (`torchvision`): Digunakan untuk memuat arsitektur ResNet-50, memproses transformasi gambar (augmentasi), dan memuat dataset.
+* **Scikit-Learn** (`scikit-learn`): Digunakan untuk menghitung metrik evaluasi kinerja model (akurasi, *Classification Report*, dan *Confusion Matrix*).
+
+### 2. Pengolahan Citra (Image Processing)
+* **OpenCV** (`opencv-python`): Digunakan pada tahap *preprocessing* untuk membaca gambar mentah dan memotongnya menjadi *patches*.
+* **Pillow** (`Pillow`): Digunakan untuk membuka, mengubah format warna menjadi RGB, dan memanipulasi gambar saat memuat dataset dan menjalankan Grad-CAM.
+
+### 3. Analisis Data & Visualisasi
+* **NumPy** (`numpy`): Digunakan untuk komputasi numerik dan manipulasi matriks/array gambar.
+* **Matplotlib** (`matplotlib`): Digunakan untuk menggambar grafik visual seperti *Confusion Matrix* dan hasil *Grad-CAM*.
+* **Seaborn** (`seaborn`): Digunakan untuk mempercantik tampilan *Confusion Matrix* menjadi *heatmap* berwarna yang mudah dibaca.
+* **PyTorch Grad-CAM** (`grad-cam`): Library khusus *(Explainable AI)* untuk menghasilkan *heatmap* visual guna menganalisis area fokus model saat memprediksi kelas gambar.
+
+> **Catatan:** Proyek ini juga menggunakan pustaka bawaan Python seperti `os`, `pathlib`, dan `glob` yang otomatis tersedia dan tidak perlu diinstal secara terpisah.
+
+---
+
+## Cara Instalasi
+
+Untuk mempermudah persiapan *environment* Anda, Anda dapat menginstal semua pustaka eksternal yang dibutuhkan secara bersamaan melalui terminal. 
+
+Pastikan Anda sudah mengaktifkan *virtual environment* (misal: `source .venv/bin/activate`), lalu jalankan perintah berikut:
+
+```bash
+pip install torch torchvision scikit-learn opencv-python Pillow numpy matplotlib seaborn grad-cam
+
+---
+
 # Urutan Eksekusi Skrip (Dijalankan di Terminal)
 
 ## Langkah 1: Ekstraksi Data (Preprocessing)
 *   **File yang dieksekusi:** `preprocess.py`
-*   **Fungsi:** Mengambil gambar medis mentah dari folder `train/train/`, memotongnya menjadi *patch* berukuran 256x256, menyaring dan membuang area yang tidak relevan (background putih/kosong), lalu menyimpannya ke folder `dataset_patches`[cite: 35].
+*   **Metode & Fungsi:** Menggunakan metode **Patch Extraction** untuk memotong gambar medis mentah dari folder `train/train/` menjadi potongan (*patch*) berukuran 256x256 piksel. Proses ini menerapkan **Thresholding Filtering** yang menghitung rata-rata nilai piksel pada setiap potongan; jika area tersebut terlalu terang atau dominan putih (nilai > 240), maka potongan tersebut dianggap sebagai *background* kosong dan akan dibuang. Hasil potongan gambar yang relevan kemudian disimpan ke folder `dataset_patches`.
 *   **Perintah Terminal:**
     ```bash
     python preprocess.py
@@ -67,7 +101,7 @@ source .venv/bin/activate
 
 ## Langkah 2: Memulai Pre-Training (Self-Supervised Learning)
 *   **File yang dieksekusi:** `train.py`
-*   **Fungsi:** Menyatukan logika dari `config.py`, `dataset.py`, dan `model.py`[cite: 37]. Skrip ini melatih model ResNet50 untuk mengenali fitur dari *patch* gambar yang sudah dibuat pada Langkah 1, mengevaluasi *loss*, dan menyimpan bobot kemajuan model (*checkpoints*) ke harddisk secara otomatis[cite: 37].
+*   **Metode & Fungsi:** Tahap ini menerapkan algoritma **SimCLR** untuk melatih model memahami struktur visual sel tanpa memerlukan label kelas. Setiap *patch* gambar akan diberikan augmentasi ekstrem untuk menghasilkan dua versi yang berbeda secara acak (`view1` dan `view2`). Arsitektur **ResNet-50** kemudian dilatih menggunakan metode *Contrastive Learning* dengan fungsi **NT-Xent Loss** untuk menarik fitur gambar yang sama dan menjauhkan fitur gambar yang berbeda di dalam sebuah *batch*. Setelah proses selesai, skrip ini membuang *projection head* dan hanya menyimpan bobot kemajuan murni dari *backbone* ResNet-50 (*checkpoints*) ke harddisk secara otomatis.
 *   **Perintah Terminal:**
     ```bash
     python train.py
@@ -75,7 +109,7 @@ source .venv/bin/activate
 
 ## Langkah 3: Fine-Tuning Model Klasifikasi
 *   **File yang dieksekusi:** `finetune.py`
-*   **Fungsi:** Melakukan *fine-tuning* pada model klasifikasi untuk 3 kelas tingkat keparahan kanker serviks[cite: 4]. Skrip ini secara otomatis memuat bobot *pre-trained* SimCLR yang telah dilatih pada Langkah 2 (model usulan), lalu melatih ulang *classification head* menggunakan dataset utuh yang dibagi menjadi 80% data latih dan 20% data validasi[cite: 4]. Setelah proses selesai dan metrik evaluasi ditampilkan, model klasifikasi final akan disimpan ke harddisk dengan nama `final_classifier_model.pth`[cite: 4].
+*   **Metode & Fungsi:** Melakukan **Transfer Learning** dan **Supervised Learning** untuk tugas klasifikasi multikelas. Skrip ini secara otomatis memuat bobot *pre-trained* SimCLR yang telah dilatih pada Langkah 2 (sebagai model usulan), sehingga model tidak mulai belajar dari nol. Selanjutnya, *classification head* disesuaikan untuk memprediksi 3 kelas tingkat keparahan kanker serviks. Model dilatih menggunakan fungsi **Cross-Entropy Loss** dengan dataset gambar utuh yang dibagi menjadi 80% data latih dan 20% data validasi. Kinerja model dievaluasi menggunakan *Classification Report*, dan model klasifikasi final disimpan ke harddisk dengan nama `final_classifier_model.pth`.
 *   **Perintah Terminal:**
     ```bash
     python finetune.py
@@ -83,7 +117,7 @@ source .venv/bin/activate
 
 ## Langkah 4: Evaluasi dan Visualisasi Kinerja Model
 *   **File yang dieksekusi:** `evaluation.py`
-*   **Fungsi:** Memvisualisasikan hasil dari model klasifikasi final yang telah dilatih[cite: 3]. Skrip ini akan membaca data validasi untuk membangun dan menampilkan *Confusion Matrix* guna melihat letak keakuratan dan kesalahan prediksi model pada setiap kelas[cite: 3]. Selain itu, skrip ini menggunakan teknik *Grad-CAM* untuk menghasilkan *heatmap*, yang memungkinkan kita melihat area spesifik mana pada gambar serviks yang menjadi fokus utama model dalam mengambil keputusan[cite: 3].
+*   **Metode & Fungsi:** Mengevaluasi dan memvisualisasikan kinerja model klasifikasi final. Skrip ini membaca data validasi untuk membangun dan menampilkan **Confusion Matrix**, guna melihat secara rinci sebaran letak keakuratan dan kesalahan prediksi model pada setiap kelas. Selain itu, skrip ini mengimplementasikan metode **Explainable AI (XAI)** menggunakan algoritma **Grad-CAM**. Metode ini menghasilkan *heatmap* visual yang ditumpuk pada gambar asli, memungkinkan kita untuk melihat area spesifik mana pada gambar serviks yang menjadi fokus utama model dalam mengambil keputusan.
 *   **Perintah Terminal:**
     ```bash
     python evaluation.py
