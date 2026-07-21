@@ -8,9 +8,9 @@ Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan ars
 ## Tuneable Hyperparameter
 
 [config.py]
-- BATCH_SIZE : Ukuran batch data yang diproses.
-- EPOCHS : Berapa kali model melihat keseluruhan dataset.
-- LEARNING_RATE : Kecepatan model dalam belajar/mengubah bobot.
+- BATCH_SIZE : Ukuran batch data yang diproses pada tahap pre-training SimCLR.
+- EPOCHS : Berapa kali model melihat keseluruhan dataset pada tahap pre-training.
+- LEARNING_RATE : Kecepatan model dalam belajar/mengubah bobot pada tahap pre-training.
 - PATCH_SIZE : Ukuran potongan gambar asli.
 
 [model.py]
@@ -22,6 +22,15 @@ Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan ars
 
 [dataset.py]
 - Augmentasi data : Kekuatan dan probabilitas augmentasi (contoh: brightness=0.4, p=0.8 pada ColorJitter, atau ukuran blur pada GaussianBlur).
+
+[finetune.py]
+- FT_BATCH_SIZE : Ukuran batch data khusus untuk tahap fine-tuning/klasifikasi.
+- FT_EPOCHS : Jumlah epoch untuk tahap fine-tuning.
+- FT_LR : Learning rate khusus untuk tahap fine-tuning.
+- USE_SSL_WEIGHTS : Pengaturan A/B Testing (True = Menggunakan bobot pre-trained SimCLR, False = Baseline ImageNet).
+
+[preprocess.py]
+- threshold background : Nilai batas (contoh: 240) untuk membuang patch gambar yang dominan putih atau kosong.
 
 ---
 
@@ -62,4 +71,20 @@ source .venv/bin/activate
 *   **Perintah Terminal:**
     ```bash
     python train.py
+    ```
+
+## Langkah 3: Fine-Tuning Model Klasifikasi
+*   **File yang dieksekusi:** `finetune.py`
+*   **Fungsi:** Melakukan *fine-tuning* pada model klasifikasi untuk 3 kelas tingkat keparahan kanker serviks[cite: 4]. Skrip ini secara otomatis memuat bobot *pre-trained* SimCLR yang telah dilatih pada Langkah 2 (model usulan), lalu melatih ulang *classification head* menggunakan dataset utuh yang dibagi menjadi 80% data latih dan 20% data validasi[cite: 4]. Setelah proses selesai dan metrik evaluasi ditampilkan, model klasifikasi final akan disimpan ke harddisk dengan nama `final_classifier_model.pth`[cite: 4].
+*   **Perintah Terminal:**
+    ```bash
+    python finetune.py
+    ```
+
+## Langkah 4: Evaluasi dan Visualisasi Kinerja Model
+*   **File yang dieksekusi:** `evaluation.py`
+*   **Fungsi:** Memvisualisasikan hasil dari model klasifikasi final yang telah dilatih[cite: 3]. Skrip ini akan membaca data validasi untuk membangun dan menampilkan *Confusion Matrix* guna melihat letak keakuratan dan kesalahan prediksi model pada setiap kelas[cite: 3]. Selain itu, skrip ini menggunakan teknik *Grad-CAM* untuk menghasilkan *heatmap*, yang memungkinkan kita melihat area spesifik mana pada gambar serviks yang menjadi fokus utama model dalam mengambil keputusan[cite: 3].
+*   **Perintah Terminal:**
+    ```bash
+    python evaluation.py
     ```
