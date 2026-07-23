@@ -11,7 +11,7 @@ RAW_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'train', 'train')
 PATCH_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'dataset_patches')
 CHECKPOINT_DIR = os.path.join(EXTERNAL_DRIVE, 'checkpoints')
 
-# Parameter Training
+# Parameter Training (not for finetune.py)
 PATCH_SIZE = 256
 BATCH_SIZE = 16 # Gunakan 16 atau 32 agar RAM/CPU lokal Anda tidak terlalu berat
 EPOCHS = 100

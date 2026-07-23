@@ -79,6 +79,8 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=FT_BATCH_SIZE, shuffle=False, num_workers=0)
 
     model = get_model(device)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=FT_LR)
 

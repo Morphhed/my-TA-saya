@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
@@ -27,7 +28,11 @@ def main():
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, drop_last=True)
 
     # 3. Setup Model & Optimizer
-    model = SimCLRModel().to(device)
+    model = SimCLRModel()
+    if torch.cuda.device_count() > 1:
+        print(f"Menggunakan {torch.cuda.device_count()} GPU (Dual RTX 2070)!")
+        model = nn.DataParallel(model)
+    model = model.to(device)
     criterion = NTXentLoss(device=device, temperature=0.5)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-6)
 
