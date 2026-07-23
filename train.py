@@ -25,7 +25,7 @@ def main():
         return
 
     # num_workers=0 sangat direkomendasikan untuk Windows lokal agar menghindari error Dataloader
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, drop_last=True)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
 
     # 3. Setup Model & Optimizer
     model = SimCLRModel()

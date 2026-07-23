@@ -75,8 +75,8 @@ def main():
     train_dataset, _ = random_split(train_full, [train_size, val_size], generator=generator)
     _, val_dataset = random_split(val_full, [train_size, val_size], generator=generator)
 
-    train_loader = DataLoader(train_dataset, batch_size=FT_BATCH_SIZE, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=FT_BATCH_SIZE, shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=FT_BATCH_SIZE, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=FT_BATCH_SIZE, shuffle=False, num_workers=4)
 
     model = get_model(device)
     if torch.cuda.device_count() > 1:
