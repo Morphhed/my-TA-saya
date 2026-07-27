@@ -11,7 +11,7 @@ from sklearn.metrics import classification_report, accuracy_score
 from config import RAW_DATA_DIR, CHECKPOINT_DIR
 
 # --- HYPERPARAMETER KHUSUS FINE-TUNING ---
-FT_BATCH_SIZE = 128
+FT_BATCH_SIZE = 64
 FT_EPOCHS = 100
 FT_LR = 1e-4
 NUM_CLASSES = 3
