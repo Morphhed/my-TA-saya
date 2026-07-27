@@ -89,7 +89,7 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         results = list(
             tqdm(
-                executor.map(process_single_image, tasks, chunksize=chunksize),
+                executor.map(process_single_image, tasks, chunksize=1),
                 total=len(tasks),
                 desc="Memproses Patches"
             )
@@ -112,4 +112,4 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
 
 
 if __name__ == "__main__":
-    extract_patches(RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE)
+    extract_patches(RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE, max_workers=4)
