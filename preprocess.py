@@ -1,7 +1,7 @@
 import os
 import cv2
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm  
 from config import RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE
 cv2.setNumThreads(0)
@@ -60,7 +60,7 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
     """
     print(f"Mencari gambar di dalam folder dan sub-foldernya: {input_dir}")
     
-    # 1. Mengambil semua gambar dengan ekstensi yang valid
+    #Mengambil semua gambar dengan ekstensi yang valid
     input_path = Path(input_dir)
     image_paths = [
         p for p in input_path.rglob('*') 
@@ -75,7 +75,7 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
     
     os.makedirs(output_dir, exist_ok=True)
 
-    # 2. Persiapan tugas untuk multiprocessing
+    #Persiapan tugas untuk multiprocessing
     tasks = [(p, output_dir, patch_size) for p in image_paths]
     
     total_patches = 0
@@ -85,17 +85,17 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
     cpu_count = os.cpu_count() or 4
     chunksize = max(1, len(tasks) // (cpu_count * 4))
 
-    # 3. Eksekusi paralel
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+    #Eksekusi paralel
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = list(
             tqdm(
-                executor.map(process_single_image, tasks, chunksize=1),
+                executor.map(process_single_image, tasks),
                 total=len(tasks),
                 desc="Memproses Patches"
             )
         )
-
-    # 4. Rekapitulasi hasil
+        
+    #Rekapitulasi hasil
     for count, failed_path in results:
         total_patches += count
         if failed_path:
