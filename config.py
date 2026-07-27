@@ -13,7 +13,7 @@ CHECKPOINT_DIR = os.path.join(EXTERNAL_DRIVE, 'checkpoints')
 
 # Parameter Training (not for finetune.py)
 PATCH_SIZE = 256
-BATCH_SIZE = 16 # Gunakan 16 atau 32 agar RAM/CPU lokal Anda tidak terlalu berat
+BATCH_SIZE = 256 
 EPOCHS = 100
 LEARNING_RATE = 1e-3
 

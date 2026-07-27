@@ -2,13 +2,13 @@
 
 ## Mulai Menjalankan Proyek
 
-Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan arsitektur ResNet50 untuk mengekstrak fitur dari gambar medis sebelum dilakukan *fine-tuning* untuk klasifikasi. Dikembangkan dan dioptimalkan untuk berjalan di lingkungan WSL2 (Windows Subsystem for Linux).
+Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan arsitektur ResNet50 untuk mengekstrak fitur dari gambar medis sebelum dilakukan *fine-tuning* untuk klasifikasi. Dikembangkan dan dioptimalkan untuk berjalan di built-in Terminal vscode.
 
 ---
 ## Tuneable Hyperparameter
 
 [config.py]
-- BATCH_SIZE : Ukuran batch data pada pre-training SimCLR (default: 16).
+- BATCH_SIZE : Ukuran batch data pada pre-training SimCLR (default: 256).
 - EPOCHS : Jumlah epoch pada pre-training SimCLR (default: 100).
 - LEARNING_RATE : Kecepatan belajar pada pre-training SimCLR (default: 1e-3).
 - PATCH_SIZE : Ukuran potongan gambar asli (default: 256).
@@ -24,7 +24,7 @@ Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan ars
 - Augmentasi data : Kekuatan dan probabilitas augmentasi SimCLR (contoh: brightness=0.4, p=0.8 pada ColorJitter, kernel_size=9 pada GaussianBlur, serta proporsi crop 0.2-1.0).
 
 [finetune.py]
-- FT_BATCH_SIZE : Ukuran batch data khusus untuk tahap fine-tuning/klasifikasi (default: 16).
+- FT_BATCH_SIZE : Ukuran batch data khusus untuk tahap fine-tuning/klasifikasi (default: 256).
 - FT_EPOCHS : Jumlah epoch untuk tahap fine-tuning (default: 15).
 - FT_LR : Learning rate khusus untuk tahap fine-tuning (default: 1e-4).
 - USE_SSL_WEIGHTS : Pengaturan A/B Testing (True = Menggunakan bobot pre-trained SimCLR, False = Baseline ImageNet).

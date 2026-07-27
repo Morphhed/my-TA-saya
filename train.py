@@ -30,7 +30,7 @@ def main():
     # 3. Setup Model & Optimizer
     model = SimCLRModel()
     if torch.cuda.device_count() > 1:
-        print(f"Menggunakan {torch.cuda.device_count()} GPU (Dual RTX 2070)!")
+        print(f"Menggunakan {torch.cuda.device_count()} GPU untuk training.")
         model = nn.DataParallel(model)
     model = model.to(device)
     criterion = NTXentLoss(device=device, temperature=0.5)
