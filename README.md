@@ -25,7 +25,7 @@ Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) dengan ars
 
 [finetune.py]
 - FT_BATCH_SIZE : Ukuran batch data khusus untuk tahap fine-tuning/klasifikasi (default: 256).
-- FT_EPOCHS : Jumlah epoch untuk tahap fine-tuning (default: 15).
+- FT_EPOCHS : Jumlah epoch untuk tahap fine-tuning (default: 100).
 - FT_LR : Learning rate khusus untuk tahap fine-tuning (default: 1e-4).
 - USE_SSL_WEIGHTS : Pengaturan A/B Testing (True = Menggunakan bobot pre-trained SimCLR, False = Baseline ImageNet).
 

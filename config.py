@@ -1,8 +1,7 @@
 import os
 
 # GANTI DENGAN PATH FOLDER UTAMA DATASET ANDA DI HARDDISK
-# Contoh: "D:/datasetTA" atau folder terluar tempat gambar mentah berada
-EXTERNAL_DRIVE = "/mnt/d/TA BOS/intel-mobileodt-cervical-cancer-screening"
+EXTERNAL_DRIVE = "F:\\BATCH 8\\SSL CERVIX\\intel-mobileodt-cervical-cancer-screening"
 
 # Jika Anda ingin mengambil data dari folder 'train'
 RAW_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'train', 'train')
@@ -13,7 +12,7 @@ CHECKPOINT_DIR = os.path.join(EXTERNAL_DRIVE, 'checkpoints')
 
 # Parameter Training (not for finetune.py)
 PATCH_SIZE = 256
-BATCH_SIZE = 256 
+BATCH_SIZE = 128 
 EPOCHS = 100
 LEARNING_RATE = 1e-3
 
