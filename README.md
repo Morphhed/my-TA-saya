@@ -92,16 +92,23 @@ pip install torch torchvision scikit-learn opencv-python Pillow numpy matplotlib
 
 ## Langkah 1: Ekstraksi Data (Preprocessing)
 *   **File yang dieksekusi:** `preprocess.py`
-*   **Metode & Fungsi:** Menggunakan metode **Patch Extraction** untuk memotong gambar medis mentah dari folder `train/train/` menjadi potongan (*patch*) berukuran 256x256 piksel. Proses ini menerapkan **Thresholding Filtering** yang menghitung rata-rata nilai piksel pada setiap potongan; jika area tersebut terlalu terang atau dominan putih (nilai > 240), maka potongan tersebut dianggap sebagai *background* kosong dan akan dibuang. Hasil potongan gambar yang relevan kemudian disimpan ke folder `dataset_patches`.
+*   **Metode & Fungsi:** Mengekstrak potongan gambar medis (*patches*) berukuran 256x256 piksel dari dataset mentah (`RAW_DATA_DIR`) secara efisien menggunakan teknik komputasi paralel:
+    *   **Multiprocessing Paralel:** Memanfaatkan `ThreadPoolExecutor` untuk membagi beban ekstraksi gambar ke seluruh *core* CPU secara otomatis dengan pemantauan *progress bar* (`tqdm`).
+    *   **Pembersihan Citra Dua Arah (Mean Filtering):** Menghitung nilai rata-rata piksel (*mean*) pada setiap potongan. Potongan gambar akan dibuang jika terlalu terang/putih kosong (`mean > 240`) ATAU terlalu gelap/latar hitam border (`mean < 20`) untuk memastikan hanya area jaringan serviks yang relevan yang disimpan.
+    *   **Penyimpanan Terstruktur:** Hasil ekstraksi disimpan ke folder `dataset_patches` dengan format penamaan sistematis `{parent_folder}_{img_name}_patch_{y}_{x}.jpg` untuk mempertahankan jejak asal gambar mentahnya.
 *   **Perintah Terminal:**
     ```bash
     python preprocess.py
     ```
-*(Tunggu hingga proses ekstraksi selesai dan muncul keterangan jumlah patch yang berhasil diekstrak)*.
 
 ## Langkah 2: Memulai Pre-Training (Self-Supervised Learning)
 *   **File yang dieksekusi:** `train.py`
-*   **Metode & Fungsi:** Tahap ini menerapkan algoritma **SimCLR** untuk melatih model memahami struktur visual sel tanpa memerlukan label kelas. Setiap *patch* gambar akan diberikan augmentasi ekstrem untuk menghasilkan dua versi yang berbeda secara acak (`view1` dan `view2`). Arsitektur **ResNet-50** kemudian dilatih menggunakan metode *Contrastive Learning* dengan fungsi **NT-Xent Loss** untuk menarik fitur gambar yang sama dan menjauhkan fitur gambar yang berbeda di dalam sebuah *batch*. Setelah proses selesai, skrip ini membuang *projection head* dan hanya menyimpan bobot kemajuan murni dari *backbone* ResNet-50 (*checkpoints*) ke harddisk secara otomatis.
+*   **Metode & Fungsi:** Tahap ini menerapkan algoritma **SimCLR** berbasis *Self-Supervised Learning* untuk melatih model memahami fitur visual jaringan serviks tanpa bergantung pada label. Setiap *patch* gambar di-augmentasi acak menjadi dua sudut pandang (`view1` dan `view2`). Arsitektur **ResNet-50** dilatih menggunakan **NT-Xent Loss** dengan beberapa optimisasi tingkat tinggi:
+    *   **Multi-GPU & Pipeline Data:** Mendukung *DataParallel* otomatis untuk akselerasi Dual-GPU serta alokasi `pin_memory` & `non_blocking` untuk mempercepat pemuatan data dari RAM ke VRAM.
+    *   **Automatic Mixed Precision (AMP):** Menggunakan `torch.cuda.amp` (FP16/FP32) guna menghemat konsumsi VRAM hingga 50% dan mempercepat proses iterasi *batch*.
+    *   **Cosine Annealing LR Scheduler:** Menyesuaikan nilai *learning rate* secara bertahap dari `1e-3` hingga mendekati `0` sepanjang 100 epoch agar konvergensi *loss* lebih optimal.
+    *   **Checkpoint & Auto-Resume:** Menyimpan status pelatihan (model, *optimizer*, *scheduler*, dan *scaler*) setiap 2 epoch sekali. Jika proses terhenti, skrip akan otomatis melanjutkan dari epoch terakhir.
+    *   **Ekstraksi Model Final:** Di akhir epoch, *projection head* dibuang dan hanya bobot murni *backbone* ResNet-50 (`simclr_resnet50_final_backbone.pth`) yang disimpan ke harddisk untuk siap digunakan di tahap *fine-tuning*.
 *   **Perintah Terminal:**
     ```bash
     python train.py
@@ -109,7 +116,11 @@ pip install torch torchvision scikit-learn opencv-python Pillow numpy matplotlib
 
 ## Langkah 3: Fine-Tuning Model Klasifikasi
 *   **File yang dieksekusi:** `finetune.py`
-*   **Metode & Fungsi:** Melakukan **Transfer Learning** dan **Supervised Learning** untuk tugas klasifikasi multikelas. Skrip ini secara otomatis memuat bobot *pre-trained* SimCLR yang telah dilatih pada Langkah 2 (sebagai model usulan), sehingga model tidak mulai belajar dari nol. Selanjutnya, *classification head* disesuaikan untuk memprediksi 3 kelas tingkat keparahan kanker serviks. Model dilatih menggunakan fungsi **Cross-Entropy Loss** dengan dataset gambar utuh yang dibagi menjadi 80% data latih dan 20% data validasi. Kinerja model dievaluasi menggunakan *Classification Report*, dan model klasifikasi final disimpan ke harddisk dengan nama `final_classifier_model.pth`.
+*   **Metode & Fungsi:** Melakukan **Transfer Learning** dan **Supervised Learning** untuk tugas klasifikasi 3 tingkat keparahan kanker serviks (Type_1, Type_2, Type_3):
+    *   **Konsistensi Pembagian Data (80/20):** Dataset utuh dibagi menjadi 80% data latih dan 20% data validasi. Proses *split* menggunakan generator dengan *seed* terkunci (`manual_seed(67)`) untuk menjamin pembagian data selalu konsisten dan dapat direplikasi.
+    *   **Fitur A/B Testing (`USE_SSL_WEIGHTS`):** Mendukung pengujian komparatif antara **Model Usulan** (memuat bobot *pre-trained* SimCLR `simclr_resnet50_final_backbone.pth` hasil Langkah 2) dan **Model Baseline** (menggunakan bobot standar ImageNet).
+    *   **Penyesuaian Arsitektur & Multi-GPU:** Mengganti lapisan *Fully Connected* (`fc`) ResNet-50 menjadi 3 luaran kelas (`NUM_CLASSES = 3`) serta mendukung akselerasi multi-GPU menggunakan `nn.DataParallel`.
+    *   **Evaluasi Kinerja Komprehensif:** Dilatih menggunakan **Cross-Entropy Loss** dan optimizer **Adam** (`lr=1e-4`, 100 epoch). Di akhir pelatihan, skrip mengevaluasi data validasi dan menampilkan `classification_report` (Presisi, Recall, F1-Score) serta menyimpan model klasifikasi final ke `final_classifier_model.pth`.
 *   **Perintah Terminal:**
     ```bash
     python finetune.py
@@ -117,7 +128,9 @@ pip install torch torchvision scikit-learn opencv-python Pillow numpy matplotlib
 
 ## Langkah 4: Evaluasi dan Visualisasi Kinerja Model
 *   **File yang dieksekusi:** `evaluation.py`
-*   **Metode & Fungsi:** Mengevaluasi dan memvisualisasikan kinerja model klasifikasi final. Skrip ini membaca data validasi untuk membangun dan menampilkan **Confusion Matrix**, guna melihat secara rinci sebaran letak keakuratan dan kesalahan prediksi model pada setiap kelas. Selain itu, skrip ini mengimplementasikan metode **Explainable AI (XAI)** menggunakan algoritma **Grad-CAM**. Metode ini menghasilkan *heatmap* visual yang ditumpuk pada gambar asli, memungkinkan kita untuk melihat area spesifik mana pada gambar serviks yang menjadi fokus utama model dalam mengambil keputusan.
+*   **Metode & Fungsi:** Mengevaluasi dan memvisualisasikan model klasifikasi final (`final_classifier_model.pth`) melalui dua pendekatan analisis:
+    *   **Confusion Matrix Heatmap (`plot_confusion_matrix`):** Memuat kembali data validasi 20% murni menggunakan *seed* yang identik (`manual_seed(67)`). Skrip ini mengalkulasi sebaran prediksi aktual vs prediksi model, lalu menggambarkannya dalam bentuk *heatmap* visual interaktif berbasis `seaborn` dan `matplotlib` untuk mendeteksi tingkat misklasifikasi antar-kelas.
+    *   **Explainable AI / Grad-CAM (`generate_gradcam`):** Menerapkan algoritma **Grad-CAM** yang menyasar lapisan konvolusi terakhir (`model.layer4[-1]`). Metode ini menghasilkan peta visualisasi *heatmap* berwarna yang ditumpuk di atas gambar serviks asli, memungkinkan peneliti memverifikasi area spesifik organ serviks yang menjadi fokus perhatian utama model dalam mengambil keputusan.
 *   **Perintah Terminal:**
     ```bash
     python evaluation.py

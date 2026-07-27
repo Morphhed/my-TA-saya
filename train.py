@@ -9,7 +9,7 @@ from dataset import SimCLRDataset, get_simclr_transforms
 from model import SimCLRModel, NTXentLoss
 
 def main():
-    # 1. Setup Device (Otomatis CPU karena CUDA tidak tersedia untuk Radeon 780M)
+    # 1. Setup Device (CUDA untuk Dual GPU)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Menjalankan training di: {device}")
     
@@ -24,17 +24,31 @@ def main():
         print("Error: Tidak ada gambar patch ditemukan. Jalankan preprocess.py terlebih dahulu!")
         return
 
-    # num_workers=0 sangat direkomendasikan untuk Windows lokal agar menghindari error Dataloader
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, drop_last=True)
+    # pin_memory=True mempercepat transfer data dari RAM ke VRAM GPU
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=BATCH_SIZE, 
+        shuffle=True, 
+        num_workers=4, 
+        drop_last=True,
+        pin_memory=True
+    )
 
-    # 3. Setup Model & Optimizer
+    # 3. Setup Model, Optimizer, Scheduler, & AMP Scaler
     model = SimCLRModel()
     if torch.cuda.device_count() > 1:
         print(f"Menggunakan {torch.cuda.device_count()} GPU untuk training.")
         model = nn.DataParallel(model)
     model = model.to(device)
+    
     criterion = NTXentLoss(device=device, temperature=0.5)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-6)
+    
+    # Cosine Annealing Learning Rate Scheduler untuk 100 Epoch
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
+    
+    # Automatic Mixed Precision (AMP) Scaler untuk efisiensi VRAM
+    scaler = torch.cuda.amp.GradScaler()
 
     # 4. Resume Checkpoint jika ada
     start_epoch = 0
@@ -42,8 +56,17 @@ def main():
     if os.path.exists(checkpoint_path):
         print("Menemukan checkpoint di Harddisk! Memuat data...")
         checkpoint = torch.load(checkpoint_path, map_location=device)
+        
+        # Load bobot model & optimizer
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        # Load scheduler & scaler jika ada
+        if 'scheduler_state_dict' in checkpoint:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if 'scaler_state_dict' in checkpoint:
+            scaler.load_state_dict(checkpoint['scaler_state_dict'])
+            
         start_epoch = checkpoint['epoch'] + 1
         print(f"Melanjutkan dari Epoch {start_epoch+1}...")
 
@@ -54,37 +77,51 @@ def main():
         total_loss = 0
         
         for batch_idx, (view1, view2) in enumerate(dataloader):
-            view1, view2 = view1.to(device), view2.to(device)
+            view1, view2 = view1.to(device, non_blocking=True), view2.to(device, non_blocking=True)
             
             optimizer.zero_grad()
-            z_i = model(view1)
-            z_j = model(view2)
             
-            loss = criterion(z_i, z_j)
-            loss.backward()
-            optimizer.step()
+            # Forward pass dengan Mixed Precision (FP16/FP32)
+            with torch.cuda.amp.autocast():
+                z_i = model(view1)
+                z_j = model(view2)
+                loss = criterion(z_i, z_j)
+            
+            # Backward pass menggunakan GradScaler
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             
             total_loss += loss.item()
             
             if batch_idx % 5 == 0:
-                print(f"Epoch [{epoch+1}/{EPOCHS}] | Batch [{batch_idx}/{len(dataloader)}] | Loss: {loss.item():.4f}")
+                current_lr = scheduler.get_last_lr()[0]
+                print(f"Epoch [{epoch+1}/{EPOCHS}] | Batch [{batch_idx}/{len(dataloader)}] | Loss: {loss.item():.4f} | LR: {current_lr:.6f}")
                 
         avg_loss = total_loss / len(dataloader)
-        print(f"=== Akhir Epoch {epoch+1} | Rata-rata Loss: {avg_loss:.4f} ===")
+        current_lr = scheduler.get_last_lr()[0]
+        print(f"=== Akhir Epoch {epoch+1} | Rata-rata Loss: {avg_loss:.4f} | LR: {current_lr:.6f} ===")
         
-        # Simpan ke Harddisk Eksternal setiap 2 epoch
+        # Update Learning Rate di akhir epoch
+        scheduler.step()
+        
+        # Simpan checkpoint ke Harddisk Eksternal setiap 2 epoch
         if (epoch + 1) % 2 == 0:
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'scaler_state_dict': scaler.state_dict(),
                 'loss': avg_loss,
             }, checkpoint_path)
             print(f"--> Checkpoint aman tersimpan ke: {checkpoint_path}")
 
     # Simpan bobot final murni Backbone ResNet50
+    # Ekstrak model asli jika terbungkus DataParallel
+    raw_model = model.module if isinstance(model, nn.DataParallel) else model
     final_model_path = os.path.join(CHECKPOINT_DIR, "simclr_resnet50_final_backbone.pth")
-    torch.save(model.backbone.state_dict(), final_model_path)
+    torch.save(raw_model.backbone.state_dict(), final_model_path)
     print("Training Selesai! Model siap digunakan untuk klasifikasi.")
 
 if __name__ == "__main__":
