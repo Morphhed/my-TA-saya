@@ -1,7 +1,7 @@
 import os
 
 # GANTI DENGAN PATH FOLDER UTAMA DATASET ANDA DI HARDDISK
-EXTERNAL_DRIVE = "F:\\BATCH 8\\SSL CERVIX\\intel-mobileodt-cervical-cancer-screening"
+EXTERNAL_DRIVE = "E:\\batch 8\\SSL CERVIX\\intel-mobileodt-cervical-cancer-screening"
 
 # Jika Anda ingin mengambil data dari folder 'train'
 RAW_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'train', 'train')

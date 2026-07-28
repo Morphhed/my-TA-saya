@@ -46,18 +46,33 @@ Sebelum menjalankan kode apa pun, pastikan dataset dari kompetisi Kaggle (*Intel
 
 ## Tahap 2: Konfigurasi Path
 Pastikan file `config.py` telah dikonfigurasi menggunakan struktur path lingkungan kerja Anda (misal: format Linux/WSL2 ataupun Terminal):
-* `EXTERNAL_DRIVE = "F:\\BATCH 8\\SSL CERVIX\\intel-mobileodt-cervical-cancer-screening"`
+* `EXTERNAL_DRIVE = "E:\\batch 8\\SSL CERVIX\\intel-mobileodt-cervical-cancer-screening"`
 * `RAW_DATA_DIR` = `os.path.join(EXTERNAL_DRIVE, 'train', 'train')`
 
 ---
 
-## Tahap 3: Menjalankan Proyek (jika dijalankan di WSL2)
+## Tahap 3: Membuat dan Mengaktifkan Virtual Environment (Windows PowerShell)
 
-Buka terminal di dalam VS Code (pastikan berada di sistem operasi Ubuntu/WSL2) dan aktifkan *virtual environment*:
+Buka terminal di dalam VS Code (pastikan menggunakan terminal PowerShell). Berikut adalah langkah-langkah untuk membuat *environment* Python, mengatur izin eksekusi skrip (jika diperlukan), dan mengaktifkannya:
 
-```bash
-source .venv/bin/activate
+**1. Membuat Virtual Environment**
+Jalankan perintah berikut untuk membuat *environment* baru bernama `venv`:
+```powershell
+py -m venv venv
 ```
+
+**2. Mengatur Permission (Bypass Error)**
+Jalankan perintah ini hanya jika Anda mengalami error (seperti "running scripts is disabled") saat mencoba mengaktifkan environment :
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+```
+
+**3. Mengaktifkan Virtual Environment**
+Setelah environment berhasil dibuat dan izin diberikan, aktifkan dengan perintah berikut :
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
 ---
 
 ## Persyaratan Sistem dan Library
