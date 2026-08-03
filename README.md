@@ -4,6 +4,10 @@
 
 Proyek ini menggunakan pendekatan *Self-Supervised Learning* (SimCLR) berbasis arsitektur ResNet-50 untuk mengekstrak fitur jaringan medis tanpa label, dilanjutkan dengan tahap *fine-tuning* terawasi (*supervised*) yang dilengkapi **CBAM (Convolutional Block Attention Module)** untuk klasifikasi 3 tingkat keparahan lesi pra-kanker serviks (`Type_1`, `Type_2`, `Type_3`). Dikembangkan dan dioptimalkan untuk berjalan di VS Code Terminal.
 
+**Sumber Dataset**  
+Data citra medis yang digunakan dalam proyek ini bersumber dari kompetisi Kaggle berikut:  
+🔗 [Intel & MobileODT Cervical Cancer Screening Dataset](https://www.kaggle.com/c/intel-mobileodt-cervical-cancer-screening/data)
+
 ---
 
 ## Tuneable Hyperparameter
@@ -102,10 +106,30 @@ Proyek ini membutuhkan beberapa pustaka (library) eksternal berbasis Python. Ber
 
 Untuk mempermudah persiapan *environment* Anda, Anda dapat menginstal semua pustaka eksternal yang dibutuhkan secara bersamaan melalui terminal. 
 
-Pastikan Anda sudah mengaktifkan *virtual environment* (misal: `source .venv/bin/activate`), lalu jalankan perintah berikut:
+Pastikan Anda sudah mengaktifkan *virtual environment* (misal: `source .venv/bin/activate`atau `py -m venv venv`), lalu jalankan perintah berikut:
 
 ```bash
 pip install torch torchvision scikit-learn opencv-python Pillow numpy matplotlib seaborn grad-cam tqdm
+```
+
+### 1. Instalasi Versi CPU (Tanpa GPU)
+Gunakan opsi ini jika tidak memiliki GPU NVIDIA
+
+Jalankan perintah berikut:
+
+```bash
+pip install torch torchvision --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+pip install scikit-learn opencv-python Pillow numpy matplotlib seaborn grad-cam tqdm
+```
+
+### 2. Instalasi Versi CUDA
+Gunakan opsi ini jika memiliki GPU NVIDIA 
+
+Jalankan perintah berikut:
+
+```bash
+pip install torch torchvision --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
+pip install scikit-learn opencv-python Pillow numpy matplotlib seaborn grad-cam tqdm
 ```
 ---
 
