@@ -15,3 +15,10 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan yang dilakukan pada sk
     *   **Penyetelan Jitter & Crop:** Membatasi kekuatan *ColorJitter* agar tidak merusak rona warna asli jaringan, serta menaikkan batas bawah *RandomResizedCrop* dari `0.2` ke `0.4` agar model tidak terlalu fokus pada area kosong/mikro.
 *   **Penggantian Optimizer ke AdamW (`train.py`):**
     *   Mengganti `optim.Adam` dengan `optim.AdamW` disertai peningkatan nilai *weight decay* menjadi `1e-4`. Algoritma *decoupled weight decay* pada AdamW memberikan stabilitas dan regularisasi bobot yang jauh lebih baik untuk proses *Self-Supervised Learning* jangka panjang.
+
+## Donlod Versi Tuning (Git Clone)
+
+```bash
+git clone -b tuning-pertama [https://github.com/Morphhed/my-TA-saya.git](https://github.com/Morphhed/my-TA-saya.git) tuning-pertama
+```
+
