@@ -11,32 +11,30 @@ VALID_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
 
 def process_single_image(args):
     """
-    Fungsi worker untuk memotong (crop) satu gambar menjadi beberapa patch.
+    Fungsi worker untuk memotong (crop) satu gambar menjadi beberapa patch dengan overlap (stride).
     """
     img_path, output_dir, patch_size = args
     parent_folder = img_path.parent.name
     img_name = img_path.stem
     patch_count = 0
+    stride = patch_size // 2 
 
     try:
         img = cv2.imread(str(img_path))
         if img is None:
-            return 0, str(img_path)  # File korup/tidak terbaca
+            return 0, str(img_path)
 
         h, w, _ = img.shape
 
-        # Jika ukuran gambar lebih kecil dari patch_size, lewati
         if h < patch_size or w < patch_size:
             return 0, None
 
-        # Slicing patch berdasarkan grid
-        for y in range(0, h - patch_size + 1, patch_size):
-            for x in range(0, w - patch_size + 1, patch_size):
+        # Slicing menggunakan STRIDE, bukan patch_size
+        for y in range(0, h - patch_size + 1, stride):
+            for x in range(0, w - patch_size + 1, stride):
                 patch = img[y:y+patch_size, x:x+patch_size]
 
                 # Filter background:
-                # 1. Abaikan patch yang terlalu putih/kosong (mean > 240)
-                # 2. Abaikan patch yang terlalu gelap/hitam border (mean < 20)
                 patch_mean = patch.mean()
                 if patch_mean > 240 or patch_mean < 20:
                     continue
@@ -44,7 +42,6 @@ def process_single_image(args):
                 patch_filename = f"{parent_folder}_{img_name}_patch_{y}_{x}.jpg"
                 output_path = os.path.join(output_dir, patch_filename)
                 
-                # Simpan patch dalam format JPG
                 cv2.imwrite(output_path, patch)
                 patch_count += 1
 

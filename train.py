@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE
+from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE
 from dataset import SimCLRDataset, get_simclr_transforms
 from model import SimCLRModel, NTXentLoss
 
@@ -41,8 +41,8 @@ def main():
         model = nn.DataParallel(model)
     model = model.to(device)
     
-    criterion = NTXentLoss(device=device, temperature=0.5)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-6)
+    criterion = NTXentLoss(device=device, temperature=TEMPERATURE)
+    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
     
     # Cosine Annealing Learning Rate Scheduler untuk 100 Epoch
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)

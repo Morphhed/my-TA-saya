@@ -12,9 +12,10 @@ CHECKPOINT_DIR = os.path.join(EXTERNAL_DRIVE, 'checkpoints')
 
 # Parameter Training (not for finetune.py)
 PATCH_SIZE = 256
-BATCH_SIZE = 64 
+BATCH_SIZE =128 
 EPOCHS = 100
 LEARNING_RATE = 1e-3
+TEMPERATURE = 0.1
 
 # Buat folder output jika belum ada
 os.makedirs(PATCH_DATA_DIR, exist_ok=True)
