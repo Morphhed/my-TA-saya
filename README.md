@@ -1,9 +1,9 @@
 # Ringkasan Perubahan / Tuning Pertama
 
-Berikut adalah ringkasan perubahan teknis dan peningkatan yang dilakukan pada skrip pre-training SimCLR untuk dataset citra medis kanker serviks, yang dioptimalkan menggunakan spesifikasi perangkat dual GPU NVIDIA RTX 2080 Ti:
+Berikut adalah ringkasan perubahan teknis dan peningkatan yang dilakukan pada skrip :
 
 *   **Peningkatan Kapasitas Batch Size (`config.py`):**
-    *   Mengubah nilai `BATCH_SIZE` dari `64` menjadi `128`. Peningkatan ini memanfaatkan kapasitas VRAM ganda RTX 2080 Ti secara optimal untuk memperbanyak jumlah sampel negatif dalam satu iterasi, sehingga memperkuat representasi kontrastif model.
+    *   Mengubah nilai `BATCH_SIZE` dari `64` menjadi `128`. Peningkatan ini memanfaatkan kapasitas VRAM secara optimal untuk memperbanyak jumlah sampel negatif dalam satu iterasi, sehingga memperkuat representasi kontrastif model.
 *   **Penyesuaian Parameter Suhu / Temperature (`config.py` & `train.py`):**
     *   Menambahkan dan menurunkan parameter `TEMPERATURE` dari `0.5` menjadi `0.1`. Suhu yang lebih rendah memberikan penalti (*harsher penalty*) yang lebih ketat terhadap sampel negatif, memaksa model agar jauh lebih sensitif terhadap perbedaan tekstur dan detail halus pada jaringan serviks.
 *   **Penerapan Overlapping Patches / Stride (`preprocess.py`):**
@@ -15,4 +15,3 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan yang dilakukan pada sk
     *   **Penyetelan Jitter & Crop:** Membatasi kekuatan *ColorJitter* agar tidak merusak rona warna asli jaringan, serta menaikkan batas bawah *RandomResizedCrop* dari `0.2` ke `0.4` agar model tidak terlalu fokus pada area kosong/mikro.
 *   **Penggantian Optimizer ke AdamW (`train.py`):**
     *   Mengganti `optim.Adam` dengan `optim.AdamW` disertai peningkatan nilai *weight decay* menjadi `1e-4`. Algoritma *decoupled weight decay* pada AdamW memberikan stabilitas dan regularisasi bobot yang jauh lebih baik untuk proses *Self-Supervised Learning* jangka panjang.
-    
