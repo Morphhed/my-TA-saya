@@ -14,6 +14,11 @@ class SimCLRModel(nn.Module):
             nn.Linear(num_ftrs, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
+            
+            nn.Linear(512, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            
             nn.Linear(512, projection_dim)
         )
 
