@@ -19,6 +19,6 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan yang dilakukan pada sk
 ## Donlod Versi Tuning (Git Clone)
 
 ```bash
-git clone -b tuning-pertama [https://github.com/Morphhed/my-TA-saya.git](https://github.com/Morphhed/my-TA-saya.git) tuning-pertama
+git clone -b tuning-pertama https://github.com/Morphhed/my-TA-saya.git tuning-pertama
 ```
 
