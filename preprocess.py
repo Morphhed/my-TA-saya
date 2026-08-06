@@ -1,10 +1,13 @@
 import os
 import cv2
+import numpy as np
+from PIL import Image, ImageFile
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm  
 from config import RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE, WORKERS
 cv2.setNumThreads(0)
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Daftar ekstensi gambar yang diizinkan
 VALID_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
@@ -20,9 +23,8 @@ def process_single_image(args):
     stride = patch_size // 2 
 
     try:
-        img = cv2.imread(str(img_path))
-        if img is None:
-            return 0, str(img_path)
+        pil_img = Image.open(str(img_path)).convert('RGB')
+        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
         h, w, _ = img.shape
 

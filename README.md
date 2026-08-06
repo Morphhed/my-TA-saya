@@ -26,6 +26,10 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pa
 ## Kedua 
 Optimasi tingkat *engineering* untuk mencegah *representation collapse*, menstabilkan gradien, dan memantau performa model secara presisi:
 
+*   **Penggantian Mesin Pembaca (OpenCV ke PIL):**
+    *   Mengganti penggunaan `cv2.imread` dengan antarmuka pembacaan dari pustaka **Pillow (PIL)**. Sebelumnya, gambar dengan struktur JPEG yang cacat ekstrem (*premature end of JPEG*) membuat *decoder* C++ internal OpenCV terjebak dalam *infinite loop* (hang secara diam-diam tanpa memicu *error* di Python). Hal ini mengunci memori *worker* dan memicu *deadlock*.
+*   **Toleransi Gambar Terpotong (*Truncated Images*):**
+    *   Mengaktifkan parameter `ImageFile.LOAD_TRUNCATED_IMAGES = True`. Konfigurasi ini memaksa skrip untuk tetap memuat blok piksel yang masih selamat dari gambar yang terpotong, alih-alih langsung menggagalkannya, sehingga meminimalisir kehilangan data pelatihan.
 *   **Peningkatan Kapasitas Projection Head (`model.py`):**
     *   Memperdalam arsitektur *projection head* dari yang awalnya standar menjadi **3-Layer MLP** (dengan ukuran 512 dimensi pada *hidden layer*). Ini terbukti secara signifikan mencegah nilai loss "menipu" (turun ke 0 karena model sekadar menghafal trik) dan memperkuat kualitas ekstraksi fitur dari *backbone* ResNet50.
 *   **Pencegahan *Shortcut Learning* Antar GPU (`train.py`):**
