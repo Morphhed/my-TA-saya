@@ -1,7 +1,7 @@
 import os
 import cv2
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm  
 from config import RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE, WORKERS
 cv2.setNumThreads(0)
@@ -78,19 +78,13 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
     total_patches = 0
     corrupted_files = []
 
-    # Hitung chunksize optimal untuk mempercepat pembagian tugas pada CPU
-    cpu_count = os.cpu_count() or 4
-    chunksize = max(1, len(tasks) // (cpu_count * 4))
-
     # Eksekusi paralel
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        results = list(
-            tqdm(
-                executor.map(process_single_image, tasks, chunksize=chunksize),
-                total=len(tasks),
-                desc="Memproses Patches"
-            )
-        )
+        futures = [executor.submit(process_single_image, task) for task in tasks]
+        
+        results = []
+        for future in tqdm(as_completed(futures), total=len(tasks), desc="Memproses Patches"):
+            results.append(future.result())
         
     #Rekapitulasi hasil
     for count, failed_path in results:

@@ -12,7 +12,7 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pa
 *   **Penerapan Overlapping Patches / Stride (`preprocess.py`):**
     *   Memodifikasi fungsi ekstraksi *patch* dari yang sebelumnya menggunakan pemotongan grid ketat berbasis `patch_size` menjadi penerapan *stride* selektif (`patch_size // 2` atau tumpang tindih 50%). Perubahan ini melipatgandakan volume dataset *patch* secara instan dan memperkaya konteks spasial antar-wilayah citra.
 *   **Migrasi dari Multithreading ke Multiprocessing (`preprocess.py`):**
-    *   Mengganti `ThreadPoolExecutor` dengan `ProcessPoolExecutor`. Pemotongan citra beresolusi tinggi dan kalkulasi matriks citra (seperti `patch.mean()`) adalah tugas *CPU-bound*. Multiprocessing menembus batasan GIL (*Global Interpreter Lock*) pada Python, memungkinkan setiap proses berjalan di memori/PID yang terisolasi untuk mencapai paralelisme sejati.
+    *   Mengganti `ThreadPoolExecutor` dengan `ProcessPoolExecutor`. Pemotongan citra beresolusi tinggi dan kalkulasi matriks citra (seperti `patch.mean()`) adalah tugas *CPU-bound*. Multiprocessing menembus batasan GIL (*Global Interpreter Lock*) pada Python.
 *   **Penyesuaian Augmentasi Khusus Medis (`dataset.py`):**
     *   **Penghapusan Grayscale:** Menghapus `transforms.RandomGrayscale` secara penuh karena warna dan kemerahan (*biomarker*) merupakan indikator esensial dalam mendeteksi lesi serviks.
     *   **Penambahan Rotasi Bebas:** Menyisipkan `transforms.RandomRotation(degrees=360)` untuk mengajari model bahwa jaringan biologis tidak memiliki orientasi mutlak atas-bawah.
