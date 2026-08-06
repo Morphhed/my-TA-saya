@@ -9,8 +9,6 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pa
     *   Mengubah nilai `num_worker` dari `4` menjadi `8`.
 *   **Penyesuaian Parameter Suhu / Temperature (`config.py` & `train.py`):**
     *   Menambahkan dan menurunkan parameter `TEMPERATURE` dari `0.5` menjadi `0.1`. Suhu yang lebih rendah memberikan penalti (*harsher penalty*) yang lebih ketat terhadap sampel negatif, memaksa model agar jauh lebih sensitif terhadap perbedaan tekstur dan detail halus pada jaringan serviks.
-*   **Penerapan Overlapping Patches / Stride (`preprocess.py`):**
-    *   Memodifikasi fungsi ekstraksi *patch* dari yang sebelumnya menggunakan pemotongan grid ketat berbasis `patch_size` menjadi penerapan *stride* selektif (`patch_size // 2` atau tumpang tindih 50%). Perubahan ini melipatgandakan volume dataset *patch* secara instan dan memperkaya konteks spasial antar-wilayah citra.
 *   **Migrasi dari Multithreading ke Multiprocessing (`preprocess.py`):**
     *   Mengganti `ThreadPoolExecutor` dengan `ProcessPoolExecutor`. Pemotongan citra beresolusi tinggi dan kalkulasi matriks citra (seperti `patch.mean()`) adalah tugas *CPU-bound*. Multiprocessing menembus batasan GIL (*Global Interpreter Lock*) pada Python.
 *   **Penyesuaian Augmentasi Khusus Medis (`dataset.py`):**

@@ -20,7 +20,7 @@ def process_single_image(args):
     parent_folder = img_path.parent.name
     img_name = img_path.stem
     patch_count = 0
-    stride = patch_size // 2 
+    stride = patch_size 
 
     try:
         pil_img = Image.open(str(img_path)).convert('RGB')
