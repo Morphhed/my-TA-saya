@@ -11,6 +11,8 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pa
     *   Menambahkan dan menurunkan parameter `TEMPERATURE` dari `0.5` menjadi `0.1`. Suhu yang lebih rendah memberikan penalti (*harsher penalty*) yang lebih ketat terhadap sampel negatif, memaksa model agar jauh lebih sensitif terhadap perbedaan tekstur dan detail halus pada jaringan serviks.
 *   **Penerapan Overlapping Patches / Stride (`preprocess.py`):**
     *   Memodifikasi fungsi ekstraksi *patch* dari yang sebelumnya menggunakan pemotongan grid ketat berbasis `patch_size` menjadi penerapan *stride* selektif (`patch_size // 2` atau tumpang tindih 50%). Perubahan ini melipatgandakan volume dataset *patch* secara instan dan memperkaya konteks spasial antar-wilayah citra.
+*   **Migrasi dari Multithreading ke Multiprocessing (`preprocess.py`):**
+    *   Mengganti `ThreadPoolExecutor` dengan `ProcessPoolExecutor`. Pemotongan citra beresolusi tinggi dan kalkulasi matriks citra (seperti `patch.mean()`) adalah tugas *CPU-bound*. Multiprocessing menembus batasan GIL (*Global Interpreter Lock*) pada Python, memungkinkan setiap proses berjalan di memori/PID yang terisolasi untuk mencapai paralelisme sejati.
 *   **Penyesuaian Augmentasi Khusus Medis (`dataset.py`):**
     *   **Penghapusan Grayscale:** Menghapus `transforms.RandomGrayscale` secara penuh karena warna dan kemerahan (*biomarker*) merupakan indikator esensial dalam mendeteksi lesi serviks.
     *   **Penambahan Rotasi Bebas:** Menyisipkan `transforms.RandomRotation(degrees=360)` untuk mengajari model bahwa jaringan biologis tidak memiliki orientasi mutlak atas-bawah.

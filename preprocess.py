@@ -3,7 +3,7 @@ import cv2
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm  
-from config import RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE
+from config import RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE, WORKERS
 cv2.setNumThreads(0)
 
 # Daftar ekstensi gambar yang diizinkan
@@ -109,4 +109,4 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
 
 
 if __name__ == "__main__":
-    extract_patches(RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE, max_workers=4)
+    extract_patches(RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE, max_workers=WORKERS)
