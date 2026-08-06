@@ -1,7 +1,7 @@
 import os
 import cv2
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm  
 from config import RAW_DATA_DIR, PATCH_DATA_DIR, PATCH_SIZE
 cv2.setNumThreads(0)
@@ -82,11 +82,11 @@ def extract_patches(input_dir, output_dir, patch_size=256, max_workers=None):
     cpu_count = os.cpu_count() or 4
     chunksize = max(1, len(tasks) // (cpu_count * 4))
 
-    #Eksekusi paralel
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    # Eksekusi paralel
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
         results = list(
             tqdm(
-                executor.map(process_single_image, tasks),
+                executor.map(process_single_image, tasks, chunksize=chunksize),
                 total=len(tasks),
                 desc="Memproses Patches"
             )
