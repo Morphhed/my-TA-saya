@@ -5,6 +5,8 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pa
 
 *   **Peningkatan Kapasitas Batch Size (`config.py`):**
     *   Mengubah nilai `BATCH_SIZE` dari `64` menjadi `128`. Peningkatan ini memanfaatkan kapasitas VRAM secara optimal untuk memperbanyak jumlah sampel negatif dalam satu iterasi, sehingga memperkuat representasi kontrastif model.
+*   **Peningkatan Num_Workers (`config.py`):**
+    *   Mengubah nilai `num_worker` dari `4` menjadi `8`.
 *   **Penyesuaian Parameter Suhu / Temperature (`config.py` & `train.py`):**
     *   Menambahkan dan menurunkan parameter `TEMPERATURE` dari `0.5` menjadi `0.1`. Suhu yang lebih rendah memberikan penalti (*harsher penalty*) yang lebih ketat terhadap sampel negatif, memaksa model agar jauh lebih sensitif terhadap perbedaan tekstur dan detail halus pada jaringan serviks.
 *   **Penerapan Overlapping Patches / Stride (`preprocess.py`):**
@@ -46,5 +48,5 @@ git clone -b tuning-pertama https://github.com/Morphhed/my-TA-saya.git tuning-pe
 Pastikan pustaka TensorBoard telah terpasang di lingkungan Python / conda Anda untuk memantau grafik metrik *training*:
 
 ```bash
-pip install tensorboard
+python -m pip install tensorboard
 ```

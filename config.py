@@ -17,6 +17,7 @@ EPOCHS = 100
 LEARNING_RATE = 1e-3
 TEMPERATURE = 0.1
 WARMUP = 10  
+WORKERS = 8
 
 # Buat folder output jika belum ada
 os.makedirs(PATCH_DATA_DIR, exist_ok=True)

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
-from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE, WARMUP
+from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE, WARMUP, WORKERS
 from dataset import SimCLRDataset, get_simclr_transforms
 from model import SimCLRModel, NTXentLoss
 
@@ -55,7 +55,7 @@ def main():
         dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=True, 
-        num_workers=4, 
+        num_workers=WORKERS, 
         drop_last=True,
         pin_memory=True
     )
