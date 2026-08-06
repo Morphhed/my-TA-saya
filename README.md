@@ -39,4 +39,12 @@ Optimasi tingkat *engineering* untuk mencegah *representation collapse*, menstab
 ## Donlod Versi Tuning (Git Clone)
 
 ```bash
-git clone -b tuning-pertama [https://github.com/Morphhed/my-TA-saya.git](https://github.com/Morphhed/my-TA-saya.git) tuning-pertama
+git clone -b tuning-pertama https://github.com/Morphhed/my-TA-saya.git tuning-pertama
+```
+
+## Updated Library (Instalasi TensorBoard)
+Pastikan pustaka TensorBoard telah terpasang di lingkungan Python / conda Anda untuk memantau grafik metrik *training*:
+
+```bash
+pip install tensorboard
+```
