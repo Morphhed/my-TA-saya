@@ -18,6 +18,8 @@ Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pa
     *   **Penyetelan Jitter & Crop:** Membatasi kekuatan *ColorJitter* agar tidak merusak rona warna asli jaringan, serta menaikkan batas bawah *RandomResizedCrop* dari `0.2` ke `0.4` agar model tidak terlalu fokus pada area kosong/mikro.
 *   **Penggantian Optimizer ke AdamW (`train.py`):**
     *   Mengganti `optim.Adam` dengan `optim.AdamW` disertai peningkatan nilai *weight decay* menjadi `1e-4`. Algoritma *decoupled weight decay* pada AdamW memberikan stabilitas dan regularisasi bobot yang jauh lebih baik untuk proses *Self-Supervised Learning* jangka panjang.
+*   **Persistensi Pekerja Dataloader (*Persistent Workers*) (`dataset.py` / `train.py`):**
+    *   Menambahkan parameter `persistent_workers=True` pada konfigurasi `DataLoader` PyTorch. Optimasi ini krusial untuk mencegah terjadinya *MemoryError* (lonjakan memori/RAM yang ekstrem) di sistem operasi Windows saat pergantian *epoch*. Daripada menghancurkan dan menciptakan ulang (*spawn*) pekerja yang memicu penyalinan ulang jutaan *path* file ke memori secara serentak, parameter ini menahan proses *worker* agar tetap hidup. Hasilnya, konsumsi RAM menjadi jauh lebih stabil (*anti-spike*) dan jeda waktu transisi antar *epoch* menjadi instan tanpa memengaruhi logika pengacakan augmentasi data.
 
 ---
 
