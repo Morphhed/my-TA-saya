@@ -1,37 +1,10 @@
 # Ringkasan Perubahan / Tuning SimCLR untuk Citra Serviks
 
-## Pertama
-Berikut adalah ringkasan perubahan teknis dan peningkatan awal yang dilakukan pada skrip:
-
-*   **Peningkatan Kapasitas Batch Size (`config.py`):**
-    *   Mengubah nilai `BATCH_SIZE` dari `64` menjadi `128`. Peningkatan ini memanfaatkan kapasitas VRAM secara optimal untuk memperbanyak jumlah sampel negatif dalam satu iterasi, sehingga memperkuat representasi kontrastif model.
-*   **Peningkatan Num_Workers (`config.py`):**
-    *   Mengubah nilai `num_worker` dari `4` menjadi `8`.
+## 1. `train.py` (Pelatihan & Optimasi)
 *   **Penyesuaian Parameter Suhu / Temperature (`config.py` & `train.py`):**
     *   Menambahkan dan menurunkan parameter `TEMPERATURE` dari `0.5` menjadi `0.1`. Suhu yang lebih rendah memberikan penalti (*harsher penalty*) yang lebih ketat terhadap sampel negatif, memaksa model agar jauh lebih sensitif terhadap perbedaan tekstur dan detail halus pada jaringan serviks.
-*   **Migrasi dari Multithreading ke Multiprocessing (`preprocess.py`):**
-    *   Mengganti `ThreadPoolExecutor` dengan `ProcessPoolExecutor`. Pemotongan citra beresolusi tinggi dan kalkulasi matriks citra (seperti `patch.mean()`) adalah tugas *CPU-bound*. Multiprocessing menembus batasan GIL (*Global Interpreter Lock*) pada Python.
-*   **Penyesuaian Augmentasi Khusus Medis (`dataset.py`):**
-    *   **Penghapusan Grayscale:** Menghapus `transforms.RandomGrayscale` secara penuh karena warna dan kemerahan (*biomarker*) merupakan indikator esensial dalam mendeteksi lesi serviks.
-    *   **Penambahan Rotasi Bebas:** Menyisipkan `transforms.RandomRotation(degrees=360)` untuk mengajari model bahwa jaringan biologis tidak memiliki orientasi mutlak atas-bawah.
-    *   **Penambahan Deformasi Elastis:** Menyisipkan `transforms.ElasticTransform(alpha=50.0, sigma=5.0)` untuk memetakan sifat fleksibel/elastis dari jaringan organ seluler.
-    *   **Penyetelan Jitter & Crop:** Membatasi kekuatan *ColorJitter* agar tidak merusak rona warna asli jaringan, serta menaikkan batas bawah *RandomResizedCrop* dari `0.2` ke `0.4` agar model tidak terlalu fokus pada area kosong/mikro.
 *   **Penggantian Optimizer ke AdamW (`train.py`):**
     *   Mengganti `optim.Adam` dengan `optim.AdamW` disertai peningkatan nilai *weight decay* menjadi `1e-4`. Algoritma *decoupled weight decay* pada AdamW memberikan stabilitas dan regularisasi bobot yang jauh lebih baik untuk proses *Self-Supervised Learning* jangka panjang.
-*   **Persistensi Pekerja Dataloader (*Persistent Workers*) (`dataset.py` / `train.py`):**
-    *   Menambahkan parameter `persistent_workers=True` pada konfigurasi `DataLoader` PyTorch. Optimasi ini krusial untuk mencegah terjadinya *MemoryError* (lonjakan memori/RAM yang ekstrem) di sistem operasi Windows saat pergantian *epoch*. Daripada menghancurkan dan menciptakan ulang (*spawn*) pekerja yang memicu penyalinan ulang jutaan *path* file ke memori secara serentak, parameter ini menahan proses *worker* agar tetap hidup. Hasilnya, konsumsi RAM menjadi jauh lebih stabil (*anti-spike*) dan jeda waktu transisi antar *epoch* menjadi instan tanpa memengaruhi logika pengacakan augmentasi data.
-
----
-
-## Kedua 
-Optimasi tingkat *engineering* untuk mencegah *representation collapse*, menstabilkan gradien, dan memantau performa model secara presisi:
-
-*   **Penggantian Mesin Pembaca (OpenCV ke PIL):**
-    *   Mengganti penggunaan `cv2.imread` dengan antarmuka pembacaan dari pustaka **Pillow (PIL)**. Sebelumnya, gambar dengan struktur JPEG yang cacat ekstrem (*premature end of JPEG*) membuat *decoder* C++ internal OpenCV terjebak dalam *infinite loop* (hang secara diam-diam tanpa memicu *error* di Python). Hal ini mengunci memori *worker* dan memicu *deadlock*.
-*   **Toleransi Gambar Terpotong (*Truncated Images*):**
-    *   Mengaktifkan parameter `ImageFile.LOAD_TRUNCATED_IMAGES = True`. Konfigurasi ini memaksa skrip untuk tetap memuat blok piksel yang masih selamat dari gambar yang terpotong, alih-alih langsung menggagalkannya, sehingga meminimalisir kehilangan data pelatihan.
-*   **Peningkatan Kapasitas Projection Head (`model.py`):**
-    *   Memperdalam arsitektur *projection head* dari yang awalnya standar menjadi **3-Layer MLP** (dengan ukuran 512 dimensi pada *hidden layer*). Ini terbukti secara signifikan mencegah nilai loss "menipu" (turun ke 0 karena model sekadar menghafal trik) dan memperkuat kualitas ekstraksi fitur dari *backbone* ResNet50.
 *   **Pencegahan *Shortcut Learning* Antar GPU (`train.py`):**
     *   Mengonversi model menggunakan `nn.SyncBatchNorm.convert_sync_batchnorm` sebelum dibungkus dengan `DataParallel`. Hal ini krusial pada setup *Multi-GPU* agar model tidak menggunakan statistik *Batch Normalization* lokal sebagai contekan untuk mencocokkan gambar.
 *   **Penerapan *Linear Warmup* & *Cosine Annealing* (`config.py` & `train.py`):**
@@ -44,6 +17,34 @@ Optimasi tingkat *engineering* untuk mencegah *representation collapse*, menstab
     *   Memasukkan modul `SummaryWriter` untuk memantau metrik pergerakan kurva *Loss* dan *Learning Rate* per batch secara visual.
     *   Menyisipkan *workaround* `scheduler.last_epoch += 1` sebagai penambal *bug* internal PyTorch pada `SequentialLR` agar kurva LR tidak macet (*stuck*) di tengah jalan.
 
+## 2. `preprocess.py` (Pra-pemrosesan Data)
+*   **Migrasi dari Multithreading ke Multiprocessing (`preprocess.py`):**
+    *   Mengganti `ThreadPoolExecutor` dengan `ProcessPoolExecutor`. Pemotongan citra beresolusi tinggi dan kalkulasi matriks citra (seperti `patch.mean()`) adalah tugas *CPU-bound*. Multiprocessing menembus batasan GIL (*Global Interpreter Lock*) pada Python.
+
+## 3. `config.py` (Konfigurasi Global)
+*   **Peningkatan Kapasitas Batch Size (`config.py`):**
+    *   Mengubah nilai `BATCH_SIZE` dari `64` menjadi `128`. Peningkatan ini memanfaatkan kapasitas VRAM secara optimal untuk memperbanyak jumlah sampel negatif dalam satu iterasi, sehingga memperkuat representasi kontrastif model.
+*   **Peningkatan Num_Workers (`config.py`):**
+    *   Mengubah nilai `num_worker` dari `4` menjadi `8`.
+
+## 4. `dataset.py` (Manajemen Dataset & Augmentasi)
+*   **Penyesuaian Augmentasi Khusus Medis (`dataset.py`):**
+    *   **Penghapusan Grayscale:** Menghapus `transforms.RandomGrayscale` secara penuh karena warna dan kemerahan (*biomarker*) merupakan indikator esensial dalam mendeteksi lesi serviks.
+    *   **Penambahan Rotasi Bebas:** Menyisipkan `transforms.RandomRotation(degrees=360)` untuk mengajari model bahwa jaringan biologis tidak memiliki orientasi mutlak atas-bawah.
+    *   **Penambahan Deformasi Elastis:** Menyisipkan `transforms.ElasticTransform(alpha=50.0, sigma=5.0)` untuk memetakan sifat fleksibel/elastis dari jaringan organ seluler.
+    *   **Penyetelan Jitter & Crop:** Membatasi kekuatan *ColorJitter* agar tidak merusak rona warna asli jaringan, serta menaikkan batas bawah *RandomResizedCrop* dari `0.2` ke `0.4` agar model tidak terlalu fokus pada area kosong/mikro.
+
+## 5. `model.py` (Arsitektur Jaringan)
+*   **Peningkatan Kapasitas Projection Head (`model.py`):**
+    *   Memperdalam arsitektur *projection head* dari yang awalnya standar menjadi **3-Layer MLP** (dengan ukuran 512 dimensi pada *hidden layer*). Ini terbukti secara signifikan mencegah nilai loss "menipu" (turun ke 0 karena model sekadar menghafal trik) dan memperkuat kualitas ekstraksi fitur dari *backbone* ResNet50.
+
+## 6. Lainnya (Sistem Pembacaan Citra)
+*   **Penggantian Mesin Pembaca (OpenCV ke PIL):**
+    *   Mengganti penggunaan `cv2.imread` dengan antarmuka pembacaan dari pustaka **Pillow (PIL)**. Sebelumnya, gambar dengan struktur JPEG yang cacat ekstrem (*premature end of JPEG*) membuat *decoder* C++ internal OpenCV terjebak dalam *infinite loop* (hang secara diam-diam tanpa memicu *error* di Python). Hal ini mengunci memori *worker* dan memicu *deadlock*.
+*   **Toleransi Gambar Terpotong (*Truncated Images*):**
+    *   Mengaktifkan parameter `ImageFile.LOAD_TRUNCATED_IMAGES = True`. Konfigurasi ini memaksa skrip untuk tetap memuat blok piksel yang masih selamat dari gambar yang terpotong, alih-alih langsung menggagalkannya, sehingga meminimalisir kehilangan data pelatihan.
+
+---
 ## Donlod Versi Tuning (Git Clone)
 
 ```bash

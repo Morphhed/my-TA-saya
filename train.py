@@ -56,7 +56,6 @@ def main():
         batch_size=BATCH_SIZE, 
         shuffle=True, 
         num_workers=WORKERS,
-        persistent_workers=True, 
         drop_last=True,
         pin_memory=True
     )
