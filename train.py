@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
-from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE, WARMUP, WORKERS
+from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE, WARMUP, WORKERS, WEIGHT
 from dataset import SimCLRDataset, get_simclr_transforms
 from model import SimCLRModel, NTXentLoss
 
@@ -71,7 +71,7 @@ def main():
     criterion = NTXentLoss(device=device, temperature=TEMPERATURE)
     
     # Optimizer AdamW 
-    optimizer = configure_optimizer(model, LEARNING_RATE, weight_decay=1e-4)
+    optimizer = configure_optimizer(model, LEARNING_RATE, weight_decay=WEIGHT)
     
     # Cosine Annealing Learning Rate Scheduler untuk 100 Epoch
     warmup_epochs = WARMUP
@@ -114,44 +114,53 @@ def main():
 
     # 5. Training Loop
     global_step = 0
-    print("Memulai Pre-training SimCLR...")
+    ACCUMULATION_STEPS = 4  # Jumlah batch untuk akumulasi gradien
+
+    print("Memulai Pre-training SimCLR dengan Gradient Accumulation...")
     for epoch in range(start_epoch, EPOCHS):
         model.train()
         total_loss = 0
+        optimizer.zero_grad() 
         
         for batch_idx, (view1, view2) in enumerate(dataloader):
             view1, view2 = view1.to(device, non_blocking=True), view2.to(device, non_blocking=True)
             
-            optimizer.zero_grad()            
             with torch.cuda.amp.autocast():
                 z_i = model(view1)
                 z_j = model(view2)
                 loss = criterion(z_i, z_j)
+                
+                # Normalisasi loss berdasarkan jumlah akumulasi
+                loss = loss / ACCUMULATION_STEPS
             
+            # Akumulasi gradien (tidak melakukan step optimizer di sini)
             scaler.scale(loss).backward()            
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)            
-            scaler.step(optimizer)
-            scaler.update()
             
-            total_loss += loss.item()
+            if ((batch_idx + 1) % ACCUMULATION_STEPS == 0) or ((batch_idx + 1) == len(dataloader)):
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)            
+                
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad() 
+            
+            # Kembalikan nilai loss ke ukuran aslinya untuk pencatatan metrik
+            total_loss += (loss.item() * ACCUMULATION_STEPS)
             global_step += 1
             
             if batch_idx % 5 == 0:
                 current_lr = scheduler.get_last_lr()[0]
-                print(f"Epoch [{epoch+1}/{EPOCHS}] | Batch [{batch_idx}/{len(dataloader)}] | Loss: {loss.item():.4f} | LR: {current_lr:.6f}")
+                print(f"Epoch [{epoch+1}/{EPOCHS}] | Batch [{batch_idx}/{len(dataloader)}] | Loss: {(loss.item() * ACCUMULATION_STEPS):.4f} | LR: {current_lr:.6f}")
                 
-                writer.add_scalar("Training/Batch_Loss", loss.item(), global_step)
+                writer.add_scalar("Training/Batch_Loss", (loss.item() * ACCUMULATION_STEPS), global_step)
                 writer.add_scalar("Training/Learning_Rate", current_lr, global_step)
                 
         avg_loss = total_loss / len(dataloader)
         current_lr = scheduler.get_last_lr()[0]
         print(f"=== Akhir Epoch {epoch+1} | Rata-rata Loss: {avg_loss:.4f} | LR: {current_lr:.6f} ===")
         
-        # Update Scheduler di akhir epoch
         scheduler.step()
         
-        # Simpan checkpoint ke Harddisk Eksternal setiap 2 epoch
         if (epoch + 1) % 2 == 0:
             torch.save({
                 'epoch': epoch,
@@ -163,7 +172,6 @@ def main():
             }, checkpoint_path)
             print(f"--> Checkpoint aman tersimpan ke: {checkpoint_path}")
 
-    # Simpan bobot final murni Backbone ResNet50
     raw_model = model.module if isinstance(model, nn.DataParallel) else model
     final_model_path = os.path.join(CHECKPOINT_DIR, "simclr_resnet50_final_backbone.pth")
     torch.save(raw_model.backbone.state_dict(), final_model_path)

@@ -27,13 +27,14 @@ class SimCLRDataset(Dataset):
 def get_simclr_transforms():
     return transforms.Compose([
         transforms.RandomResizedCrop(size=224, scale=(0.4, 1.0)),
-        transforms.RandomRotation(degrees=360),                      # Tambahan: Rotasi bebas 360 derajat
+        transforms.RandomRotation(degrees=360),                      
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
-        transforms.ElasticTransform(alpha=50.0, sigma=5.0),          # Tambahan: Distorsi elastis jaringan organ
+        transforms.ElasticTransform(alpha=50.0, sigma=5.0),          
         transforms.RandomApply([
             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05)
         ], p=0.8),
+        transforms.RandomGrayscale(p=0.2), 
         transforms.GaussianBlur(kernel_size=9, sigma=(0.1, 2.0)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
