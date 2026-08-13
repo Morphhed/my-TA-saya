@@ -28,13 +28,6 @@ Data citra medis yang digunakan dalam proyek ini bersumber dari kompetisi Kaggle
 ### `dataset.py`
 - **Augmentasi Data**: Parameter kekuatan transformasi citra SimCLR (*ColorJitter*: `brightness=0.4`, `contrast=0.4`, `saturation=0.4`, `p=0.8`; *GaussianBlur*: `kernel_size=9`, `sigma=(0.1, 2.0)`; *RandomResizedCrop*: `scale=(0.2, 1.0)`).
 
-### `finetune.py`
-- **`FT_BATCH_SIZE`**: Ukuran batch data khusus tahap *fine-tuning* (default: `64`).
-- **`FT_EPOCHS`**: Jumlah epoch untuk tahap *fine-tuning* (default: `100`).
-- **`FT_LR`**: Learning rate khusus untuk *fine-tuning* (default: `1e-4`).
-- **`NUM_CLASSES`**: Jumlah kelas klasifikasi target (default: `3`).
-- **`USE_SSL_WEIGHTS`**: Pengaturan A/B Testing (`True` = Menggunakan bobot *pre-trained* SimCLR + CBAM, `False` = Baseline ImageNet + CBAM).
-
 ### `preprocess.py`
 - **Threshold Background**: Nilai batas kecerahan piksel rata-rata (`mean > 240` untuk area putih kosong atau `mean < 20` untuk *border* hitam) untuk membuang *patch* yang tidak informatif.
 
@@ -157,26 +150,4 @@ pip install scikit-learn opencv-python Pillow numpy matplotlib seaborn grad-cam 
   * **Perintah Terminal:**
     ```bash
     python train.py
-    ```
-
-## Langkah 3: Fine-Tuning Model Klasifikasi
-* **File yang dieksekusi:** `finetune.py`
-* **Metode & Fungsi:** Melakukan **Transfer Learning** dan **Supervised Learning** untuk tugas klasifikasi 3 tingkat keparahan kanker serviks (`Type_1`, `Type_2`, `Type_3`):
-  * **Integrasi CBAM Attention Mechanism:** Membangun arsitektur kustom `ResNet50WithAttention` yang menggabungkan *backbone* ResNet-50 dengan modul *Channel Attention* dan *Spatial Attention* (CBAM) tepat setelah `layer4`. Hal ini memaksa model memfokuskan ekstraksi fitur pada area lesi jaringan pra-kanker dan mengabaikan distractor visual.
-  * **Fitur A/B Testing (`USE_SSL_WEIGHTS`):** Saat `USE_SSL_WEIGHTS = True`, model memuat bobot *pre-trained* SimCLR (`simclr_resnet50_final_backbone.pth`) menggunakan `strict=False` untuk mentransfer pemahaman fitur SSL. Sementara saat `False`, model bertindak sebagai *baseline* standar ImageNet.
-  * **Konsistensi Pembagian Data (80/20):** Dataset utuh dibagi menjadi 80% data latih dan 20% data validasi. Proses *split* dikunci menggunakan generator ber-*seed* khusus (`manual_seed(67)`) untuk menjamin subset validasi 100% identik dengan yang diuji pada `evaluation.py`.
-  * **Penyimpanan Bebas Wrapper Multi-GPU:** Sebelum disimpan ke `best_classifier_model.pth` dan `final_classifier_model.pth`, pembungkus `nn.DataParallel` dibongkar secara otomatis (`model.module`) agar aman dimuat ulang tanpa terjadi *key error*.
-  * **Perintah Terminal:**
-    ```bash
-    python finetune.py
-    ```
-
-## Langkah 4: Evaluasi dan Visualisasi Kinerja Model
-* **File yang dieksekusi:** `evaluation.py`
-* **Metode & Fungsi:** Mengevaluasi dan memvisualisasikan model klasifikasi final (`final_classifier_model.pth`) melalui dua pendekatan analisis:
-  * **Confusion Matrix Heatmap (`plot_confusion_matrix`):** Memuat kembali subset 20% data validasi murni menggunakan *seed* yang identik (`manual_seed(67)`). Skrip mengalkulasi matriks prediksi aktual vs prediksi model dan memvisualisasikannya dalam bentuk *heatmap* interaktif berbasis `seaborn` untuk menganalisis misklasifikasi antar-kelas.
-  * **Explainable AI / Grad-CAM (`generate_gradcam`):** Menerapkan algoritma **Grad-CAM** yang menargetkan lapisan konvolusi terakhir (`model.layer4[-1]`) pada arsitektur `ResNet50WithAttention`. Metode ini menghasilkan *heatmap* transparan berwarna yang ditumpuk di atas citra serviks asli untuk memverifikasi secara visual bahwa keputusan prediksi model didasarkan pada area jaringan organ yang tepat.
-  * **Perintah Terminal:**
-    ```bash
-    python evaluation.py
     ```
