@@ -11,6 +11,7 @@ from sklearn.metrics import (
     roc_auc_score, cohen_kappa_score, confusion_matrix, classification_report
 )
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
 
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
@@ -82,12 +83,25 @@ def evaluate_knn(model, train_loader, test_loader, device, num_classes, model_na
     print(f"[{model_name}] Mengekstrak fitur data uji...")
     X_test, y_test = extract_features(model, test_loader, device)
     
-    print(f"[{model_name}] Menjalankan pencocokan K-Nearest Neighbors (k=5)...")
-    knn = KNeighborsClassifier(n_neighbors=5, weights='distance')
-    knn.fit(X_train, y_train)
+    print(f"[{model_name}] Menjalankan pencarian parameter terbaik (GridSearchCV) untuk KNN...")    
+    param_grid = {
+        'n_neighbors': [3, 5, 7, 9, 11, 15],
+        'weights': ['uniform', 'distance'],
+        'metric': ['euclidean', 'manhattan', 'cosine']
+    }
+    grid_search = GridSearchCV(
+        KNeighborsClassifier(), 
+        param_grid, 
+        cv=5, 
+        scoring='accuracy', 
+        n_jobs=-1
+    )    
+    grid_search.fit(X_train, y_train)
+    best_knn = grid_search.best_estimator_
+    print(f"[{model_name}] Parameter KNN terbaik ditemukan: {grid_search.best_params_}")
     
-    all_preds = knn.predict(X_test)
-    all_probs = knn.predict_proba(X_test)
+    all_preds = best_knn.predict(X_test)
+    all_probs = best_knn.predict_proba(X_test)
 
     # --- HITUNG METRIK KLASIFIKASI ---
     acc = accuracy_score(y_test, all_preds)

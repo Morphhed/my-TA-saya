@@ -15,7 +15,7 @@ BASE_MODEL_DIR = r"D:\TA BOS\training ssl"
 
 # Pilih folder eksperimen yang ingin dievaluasi SEMUA file .pth-nya
 # (contoh: "main", "tunigan 1", "tunigan 2", etc)
-EXPERIMENT_FOLDER = "tunigan 1"
+EXPERIMENT_FOLDER = "tunigan 2"
 
 # Gabungan path folder yang akan dibaca otomatis oleh evaluation.py
 TARGET_FOLDER_PATH = os.path.join(BASE_MODEL_DIR, EXPERIMENT_FOLDER)

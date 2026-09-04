@@ -1,6 +1,6 @@
 # Modul Evaluasi Feature Representation (SimCLR ResNet50) - Klasifikasi Lesi Pra-Kanker Serviks
 
-Repositori ini berisi skrip Python untuk melakukan evaluasi kualitas representasi fitur (*feature representation*) secara otomatis terhadap sekumpulan file bobot checkpoint (`.pth`) hasil pelatihan *Self-Supervised Learning* (SimCLR) berarsitektur ResNet50. Evaluasi dilakukan secara murni tanpa *fine-tuning* bobot (*non-parametric linear evaluation*) menggunakan algoritma **K-Nearest Neighbors (KNN)**.
+Repositori ini berisi skrip Python untuk melakukan evaluasi kualitas representasi fitur (*feature representation*) secara otomatis terhadap sekumpulan file bobot checkpoint (`.pth`) hasil pelatihan *Self-Supervised Learning* (SimCLR) berarsitektur ResNet50. Evaluasi dilakukan secara murni tanpa *fine-tuning* bobot (*non-parametric linear evaluation*) menggunakan algoritma **K-Nearest Neighbors (KNN)** yang dioptimalkan secara otomatis menggunakan **GridSearchCV**.
 
 ---
 
