@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 
-from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE, WARMUP, WORKERS, WEIGHT
+from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_RATE, TEMPERATURE, WARMUP, WORKERS, WEIGHT, ACC_STEP
 from dataset import SimCLRDataset, get_simclr_transforms
 from model import SimCLRModel, NTXentLoss
 
@@ -114,7 +114,7 @@ def main():
 
     # 5. Training Loop
     global_step = 0
-    ACCUMULATION_STEPS = 4  # Jumlah batch untuk akumulasi gradien
+    ACCUMULATION_STEPS = ACC_STEP  # Jumlah batch untuk akumulasi gradien
 
     print("Memulai Pre-training SimCLR dengan Gradient Accumulation...")
     for epoch in range(start_epoch, EPOCHS):

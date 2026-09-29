@@ -1,33 +1,29 @@
-# Ringkasan Perubahan (Mengikuti Base dari 'Tuning-Pertama')
+# Dokumentasi Dataset: Malhari & AnnoCerv
 
-## 1. `train.py` (Pelatihan & Optimasi)
-*   **Persistensi Pekerja Dataloader (*Persistent Workers*) (`dataset.py` / `train.py`):**
-    *   Menambahkan parameter `persistent_workers=True` pada konfigurasi `DataLoader` PyTorch. Optimasi ini krusial untuk mencegah terjadinya *MemoryError* (lonjakan memori/RAM yang ekstrem) di sistem operasi Windows saat pergantian *epoch*. Daripada menghancurkan dan menciptakan ulang (*spawn*) pekerja yang memicu penyalinan ulang jutaan *path* file ke memori secara serentak, parameter ini menahan proses *worker* agar tetap hidup. Hasilnya, konsumsi RAM menjadi jauh lebih stabil (*anti-spike*) dan jeda waktu transisi antar *epoch* menjadi instan tanpa memengaruhi logika pengacakan augmentasi data.
-*   **Pengetatan Regularisasi (*Weight Decay*):**
-    *   Menaikkan parameter `weight_decay` pada optimizer AdamW dari `1e-4` menjadi `1e-3`. Hal ini bertujuan untuk memberikan hukuman (*penalty*) yang lebih berat pada bobot model agar tidak mudah beradaptasi pada *noise* (*overfitting*) dan mencegah *shortcut learning* saat memproses volume *patch* yang ekstrem.
-*   **Implementasi *Gradient Accumulation*:**
-    *   Menambahkan mekanisme `ACCUMULATION_STEPS = 4` untuk menstabilkan arah pembaruan bobot (*gradient direction*). Model menumpuk gradien selama 4 iterasi *batch* (128 gambar) sebelum mengeksekusi langkah *optimizer*. Teknik ini menyimulasikan efek kestabilan *batch size* raksasa tanpa membuat VRAM GPU *Out of Memory* (OOM).
+Proyek klasifikasi kanker serviks ini (menggunakan ResNet-50 + CBAM + SimCLR) menggunakan gabungan dataset klinis/kolposkopi dari dua sumber publik untuk menghasilkan klasifikasi biner (**Normal** vs **Abnormal**).
 
-## 2. `config.py` (HyperParameter)
-*   **Pelunakan Suhu (*Temperature*):**
-    *   Mengembalikan nilai `TEMPERATURE` dari `0.1` menjadi `0.5`. Suhu `0.1` terbukti terlalu tajam untuk dataset berskala jutaan *patch*, menyebabkan *loss* terjun bebas terlalu cepat menuju *Representation Collapse*. Suhu `0.5` membuat penalti lebih lunak, sehingga kurva penurunan *loss* bergerak lebih bertahap dan model mempelajari fitur sel secara matang.
-*   **Pengendalian Laju Pembelajaran (*Learning Rate*):**
-    *   Menurunkan `LEARNING_RATE` dari `1e-3` menjadi `5e-4`. Penyesuaian ini mencegah *optimizer* mengambil langkah tebakan yang terlalu lebar, menjaga stabilitas dinamika pelatihan pada iterasi yang sangat panjang.
+## Sumber Dataset
+* **Malhari Dataset:** Dataset citra klinis kanker serviks ([Mendeley Data](https://data.mendeley.com/datasets/m5kxdj7m36/1)).
+* **AnnoCerv Dataset:** Dataset citra kolposkopi beserta anotasi/masking ([GitHub](https://github.com/iclx/AnnoCerv)).
 
-## 3. `dataset.py` (Augmentasi Data)
-*   **Pencegahan *Shortcut* Warna (*Grayscale*):**
-    *   Mengembalikan augmentasi `transforms.RandomGrayscale` dengan probabilitas rendah (`p=0.2`). Penghapusan total gambar hitam-putih sebelumnya berisiko membuat model berbuat curang dengan sekadar mencocokkan intensitas warna pewarna klinis/kamera antar *patch*. Probabilitas 20% ini memaksa model untuk sesekali murni menganalisis bentuk (*shape*) dan tekstur jaringan sel serviks tanpa bergantung pada rona warna.
+## Dasar Klinis Pemetaan Kelas (Normal vs Abnormal)
 
----
-## Donlod Versi Tuning (Git Clone)
+**AnnoCerv (Berdasarkan Swede Score)**
+* **Normal:** Swede Score < 5
+* **Abnormal:** Swede Score ≥ 5
+> **Justifikasi:** Sesuai standar klinis (Strander et al., 2005; Bowring et al., 2010), Swede Score < 5 mengindikasikan lesi *low-risk* yang tidak memerlukan biopsi rutin. Skor ≥ 5 adalah ambang batas klinis (*cutoff*) pendeteksian lesi pra-kanker derajat tinggi (CIN2+) yang wajib dibiopsi.
 
-```bash
-git clone -b tuning-kedua https://github.com/Morphhed/my-TA-saya.git tuning-kedua
-```
+**Malhari (Berdasarkan Keparahan CIN)**
+* **Normal:** CIN 1
+* **Abnormal:** CIN 2 dan CIN 3
+> **Justifikasi:** Merujuk pada panduan ASCCP dan standar *benchmark ML*, klasifikasi ini menggunakan ambang batas CIN2+. CIN 1 dikategorikan *low-risk* karena dapat mengalami regresi spontan, sedangkan CIN 2+ adalah lesi *high-risk* yang memerlukan tindakan medis.
 
-## Updated Library (Instalasi TensorBoard)
-Pastikan pustaka TensorBoard telah terpasang di lingkungan Python / conda Anda untuk memantau grafik metrik *training*:
+## Penggabungan dan Split Dataset
+File citra `.jpg` dari masing-masing dataset disatukan berdasarkan kelasnya (Normal dengan Normal, Abnormal dengan Abnormal). Kumpulan data gabungan ini kemudian dibagi secara acak dengan rasio:
+* **Train (80%):** Untuk *pre-training* SSL dan *fine-tuning* model.
+* **Test (20%):** Disisihkan khusus untuk evaluasi metrik akhir.
 
-```bash
-python -m pip install tensorboard
-```
+## Penyesuaian Preprocessing untuk SimCLR
+Untuk memastikan dataset kompatibel dengan *pipeline* PyTorch dan *Self-Supervised Learning* (SimCLR), dilakukan dua penyesuaian:
+* **Perataan Direktori (Flat Directory):** Mengeluarkan gambar dari dalam folder masing-masing pasien sehingga struktur akhirnya langsung merujuk pada kelas (contoh: `train/Normal/image.jpg`).
+* **Hanya Menggunakan Citra `.jpg`:** File anotasi `.png` (masking tepi) tidak diikutsertakan ke dalam *DataLoader*. Jika file `.png` ikut masuk ke dalam pipeline augmentasi SSL, fungsi *contrastive loss* (NT-Xent) akan mempelajari fitur garis buatan yang salah, bukan tekstur biologis asli lesi serviks. *(Catatan: File `.png` ini dapat dimanfaatkan nanti jika diperlukan preprocessing ekstraksi Region of Interest menggunakan OpenCV).*

@@ -1,16 +1,16 @@
 import os
 
-# GANTI DENGAN PATH FOLDER UTAMA DATASET ANDA DI HARDDISK
-EXTERNAL_DRIVE = "E:\\batch 8\\SSL CERVIX\\intel-mobileodt-cervical-cancer-screening"
+# 1. PATH UTAMA DATASET GABUNGAN
+EXTERNAL_DRIVE = r"C:\TA\malhari + anno"
 
-# Jika Anda ingin mengambil data dari folder 'train'
-RAW_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'train', 'train')
+# 2. PATH FOLDER TRAIN (Berisi subfolder 'Abnormal' dan 'Normal')
+RAW_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'train')
 
-# Folder output (akan otomatis dibuat di dalam folder intel-mobileodt-cervical-cancer-screening)
+# 3. FOLDER OUTPUT UNTUK PATCH & CHECKPOINT
 PATCH_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'dataset_patches')
 CHECKPOINT_DIR = os.path.join(EXTERNAL_DRIVE, 'checkpoints')
 
-# Parameter Training (not for finetune.py)
+# Parameter Training (Tetap sama)
 PATCH_SIZE = 256
 BATCH_SIZE = 128
 EPOCHS = 100
@@ -19,6 +19,7 @@ TEMPERATURE = 0.5
 WEIGHT = 1e-3
 WARMUP = 10  
 WORKERS = 8
+ACC_STEP = 1
 
 # Buat folder output jika belum ada
 os.makedirs(PATCH_DATA_DIR, exist_ok=True)
