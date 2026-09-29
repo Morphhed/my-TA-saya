@@ -1,4 +1,4 @@
-# Dokumentasi Dataset: Malhari & AnnoCerv
+# Dokumentasi Dataset: Malhari & AnnoCerv (Base dari "Tuning-Kedua")
 
 Proyek klasifikasi kanker serviks ini (menggunakan ResNet-50 + CBAM + SimCLR) menggunakan gabungan dataset klinis/kolposkopi dari dua sumber publik untuk menghasilkan klasifikasi biner (**Normal** vs **Abnormal**).
 
