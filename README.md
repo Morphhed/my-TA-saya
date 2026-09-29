@@ -27,3 +27,10 @@ File citra `.jpg` dari masing-masing dataset disatukan berdasarkan kelasnya (Nor
 Untuk memastikan dataset kompatibel dengan *pipeline* PyTorch dan *Self-Supervised Learning* (SimCLR), dilakukan dua penyesuaian:
 * **Perataan Direktori (Flat Directory):** Mengeluarkan gambar dari dalam folder masing-masing pasien sehingga struktur akhirnya langsung merujuk pada kelas (contoh: `train/Normal/image.jpg`).
 * **Hanya Menggunakan Citra `.jpg`:** File anotasi `.png` (masking tepi) tidak diikutsertakan ke dalam *DataLoader*. Jika file `.png` ikut masuk ke dalam pipeline augmentasi SSL, fungsi *contrastive loss* (NT-Xent) akan mempelajari fitur garis buatan yang salah, bukan tekstur biologis asli lesi serviks. *(Catatan: File `.png` ini dapat dimanfaatkan nanti jika diperlukan preprocessing ekstraksi Region of Interest menggunakan OpenCV).*
+
+## Mekanisme Pelatihan & Checkpointing (SimCLR)
+Pada fase *pre-training* SimCLR yang bersifat *unsupervised*, model menggunakan mekanisme pengawasan metrik evaluasi kustom untuk memastikan model belajar dengan optimal:
+* **Penyesuaian Gradient Accumulation:** Nilai *accumulation steps* diturunkan menjadi 1 dari 4 karena ukuran dataset yang jauh lebih kecil.
+* **Early Stopping & Pemantauan NT-Xent Loss:** Pelatihan memantau rata-rata *loss* setiap *epoch*. Jika *loss* tidak mengalami penurunan selama 12 *epoch* berturut-turut (*patience* = 12), *training* akan dihentikan otomatis untuk mencegah *overfitting* dan membuang waktu komputasi.
+* **Stop at Best:** Sistem secara otomatis menyimpan bobot *backbone* ResNet-50 terbaik setiap kali rekor *loss* terendah tercapai (disimpan sebagai `simclr_best_epoch_X.pth`).
+* **Seamless Resume:** *State* dari pelatihan disimpan secara berkala ke dalam file `latestcheck.pth`. File ini tidak hanya mengamankan bobot model dan *optimizer*, tetapi juga menyimpan nilai `best_loss` dan hitungan *early stop counter*. Hal ini memastikan bahwa jika proses *training* terputus, pelatihan dapat dilanjutkan persis dari titik terakhirnya tanpa mereset memori *Early Stopping*.

@@ -10,11 +10,29 @@ from config import PATCH_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, EPOCHS, LEARNING_
 from dataset import SimCLRDataset, get_simclr_transforms
 from model import SimCLRModel, NTXentLoss
 
+class EarlyStopping:
+    def __init__(self, patience=12):
+        self.patience = patience
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+            return True
+        elif val_loss > self.best_loss:
+            self.counter += 1
+            print(f"EarlyStopping counter: {self.counter} dari {self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+            return False
+        else:
+            self.best_loss = val_loss
+            self.counter = 0
+            return True
+
 def configure_optimizer(model, learning_rate, weight_decay):
-    """
-    Memisahkan parameter yang membutuhkan weight decay dan yang tidak
-    untuk mencegah underfitting pada Batch Normalization dan bias.
-    """
     decay_params = []
     no_decay_params = []
     
@@ -35,22 +53,12 @@ def configure_optimizer(model, learning_rate, weight_decay):
     return optim.AdamW(optimizer_grouped_parameters, lr=learning_rate)
 
 def main():
-    # 1. Setup Device (CUDA untuk Dual GPU)
+    # 1. Setup Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Menjalankan training di: {device}")
     
-    if device.type == "cpu":
-        print("PERINGATAN: Training berjalan di CPU. Proses akan memakan waktu lebih lama.")
-
     # 2. Setup Data
-    print(f"Memuat dataset dari: {PATCH_DATA_DIR}")
     dataset = SimCLRDataset(image_dir=PATCH_DATA_DIR, transform=get_simclr_transforms())
-    
-    if len(dataset) == 0:
-        print("Error: Tidak ada gambar patch ditemukan. Jalankan preprocess.py terlebih dahulu!")
-        return
-
-    # pin_memory=True mempercepat transfer data dari RAM ke VRAM GPU
     dataloader = DataLoader(
         dataset, 
         batch_size=BATCH_SIZE, 
@@ -61,62 +69,60 @@ def main():
         pin_memory=True
     )
 
-    # 3. Setup Model, Optimizer, Scheduler, & AMP Scaler
+    # 3. Setup Model, Optimizer, Scheduler, & AMP
     model = SimCLRModel()
     if torch.cuda.device_count() > 1:
-        print(f"Menggunakan {torch.cuda.device_count()} GPU untuk training.")
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = nn.DataParallel(model)
     model = model.to(device)
     criterion = NTXentLoss(device=device, temperature=TEMPERATURE)
     
-    # Optimizer AdamW 
     optimizer = configure_optimizer(model, LEARNING_RATE, weight_decay=WEIGHT)
     
-    # Cosine Annealing Learning Rate Scheduler untuk 100 Epoch
     warmup_epochs = WARMUP
     warmup_scheduler = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
     cosine_scheduler = CosineAnnealingLR(optimizer, T_max=(EPOCHS - warmup_epochs), eta_min=1e-6)
-    
     scheduler = SequentialLR(
         optimizer, 
         schedulers=[warmup_scheduler, cosine_scheduler], 
         milestones=[warmup_epochs]
     )
     
-    # Automatic Mixed Precision (AMP) Scaler untuk efisiensi VRAM
     scaler = torch.cuda.amp.GradScaler()
 
-    # TENSORBOARD
     log_dir = os.path.join(CHECKPOINT_DIR, "tensorboard_logs")
     writer = SummaryWriter(log_dir=log_dir)
-    print(f"TensorBoard logs akan disimpan ke: {log_dir}")
 
-    # 4. Resume Checkpoint jika ada
+    # 4. Inisialisasi Early Stopping
+    early_stopping = EarlyStopping(patience=12)
     start_epoch = 0
-    checkpoint_path = os.path.join(CHECKPOINT_DIR, "latest_checkpoint.pth")
+    
+    checkpoint_path = os.path.join(CHECKPOINT_DIR, "latestcheck.pth")
     if os.path.exists(checkpoint_path):
-        print("Menemukan checkpoint di Harddisk! Memuat data...")
+        print("Menemukan file latestcheck.pth! Memuat data...")
         checkpoint = torch.load(checkpoint_path, map_location=device)
         
-        # Load bobot model & optimizer
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
-        # Load scheduler & scaler jika ada
         if 'scheduler_state_dict' in checkpoint:
             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         if 'scaler_state_dict' in checkpoint:
             scaler.load_state_dict(checkpoint['scaler_state_dict'])
+        
+        # Load state early stopping agar tidak reset dari 0 saat dilanjutkan
+        if 'best_loss' in checkpoint:
+            early_stopping.best_loss = checkpoint['best_loss']
+        if 'early_stop_counter' in checkpoint:
+            early_stopping.counter = checkpoint['early_stop_counter']
             
         start_epoch = checkpoint['epoch'] + 1
-        print(f"Melanjutkan dari Epoch {start_epoch+1}...")
+        print(f"Melanjutkan dari Epoch {start_epoch+1} | Best Loss sebelumnya: {early_stopping.best_loss:.4f}")
 
     # 5. Training Loop
     global_step = 0
-    ACCUMULATION_STEPS = ACC_STEP  # Jumlah batch untuk akumulasi gradien
+    ACCUMULATION_STEPS = ACC_STEP
 
-    print("Memulai Pre-training SimCLR dengan Gradient Accumulation...")
     for epoch in range(start_epoch, EPOCHS):
         model.train()
         total_loss = 0
@@ -129,11 +135,8 @@ def main():
                 z_i = model(view1)
                 z_j = model(view2)
                 loss = criterion(z_i, z_j)
-                
-                # Normalisasi loss berdasarkan jumlah akumulasi
                 loss = loss / ACCUMULATION_STEPS
             
-            # Akumulasi gradien (tidak melakukan step optimizer di sini)
             scaler.scale(loss).backward()            
             
             if ((batch_idx + 1) % ACCUMULATION_STEPS == 0) or ((batch_idx + 1) == len(dataloader)):
@@ -144,7 +147,6 @@ def main():
                 scaler.update()
                 optimizer.zero_grad() 
             
-            # Kembalikan nilai loss ke ukuran aslinya untuk pencatatan metrik
             total_loss += (loss.item() * ACCUMULATION_STEPS)
             global_step += 1
             
@@ -161,21 +163,43 @@ def main():
         
         scheduler.step()
         
+        # 6. PENGECEKAN EARLY STOPPING DAN SAVE BEST MODEL
+        is_best = early_stopping(avg_loss)
+        
+        if is_best:
+            best_model_name = f"simclr_best_epoch_{epoch+1}.pth"
+            best_model_path = os.path.join(CHECKPOINT_DIR, best_model_name)
+            
+            raw_model = model.module if isinstance(model, nn.DataParallel) else model
+            torch.save(raw_model.backbone.state_dict(), best_model_path)
+            print(f"🌟 Model Terbaik Baru (Loss: {early_stopping.best_loss:.4f})! Menyimpan backbone ke: {best_model_name}")
+
         if (epoch + 1) % 2 == 0:
-            torch.save({
+            checkpoint_state = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'scaler_state_dict': scaler.state_dict(),
                 'loss': avg_loss,
-            }, checkpoint_path)
-            print(f"--> Checkpoint aman tersimpan ke: {checkpoint_path}")
+                'best_loss': early_stopping.best_loss, 
+                'early_stop_counter': early_stopping.counter # Simpan hitungan kesabaran
+            }
+            
+            epoch_cp_name = f"checkpoint_epoch_{epoch+1}.pth"
+            epoch_cp_path = os.path.join(CHECKPOINT_DIR, epoch_cp_name)
+            torch.save(checkpoint_state, epoch_cp_path)
+            
+            torch.save(checkpoint_state, checkpoint_path)
+            
+            print(f"--> Checkpoint aman tersimpan ke: {epoch_cp_name} dan latestcheck.pth")
 
-    raw_model = model.module if isinstance(model, nn.DataParallel) else model
-    final_model_path = os.path.join(CHECKPOINT_DIR, "simclr_resnet50_final_backbone.pth")
-    torch.save(raw_model.backbone.state_dict(), final_model_path)
-    print("Training Selesai! Model siap digunakan untuk klasifikasi.")
+        # 7. HENTIKAN TRAINING JIKA PATIENCE HABIS
+        if early_stopping.early_stop:
+            print(f"🛑 Early stopping dipicu pada epoch {epoch+1}. Training dihentikan karena loss tidak membaik selama {early_stopping.patience} epoch berturut-turut.")
+            break
+
+    print("Training Pre-text SimCLR Selesai!")
 
 if __name__ == "__main__":
     main()
