@@ -23,10 +23,17 @@ File citra `.jpg` dari masing-masing dataset disatukan berdasarkan kelasnya (Nor
 * **Train (80%):** Untuk *pre-training* SSL dan *fine-tuning* model.
 * **Test (20%):** Disisihkan khusus untuk evaluasi metrik akhir.
 
-## Penyesuaian Preprocessing untuk SimCLR
-Untuk memastikan dataset kompatibel dengan *pipeline* PyTorch dan *Self-Supervised Learning* (SimCLR), dilakukan dua penyesuaian:
+## Penyesuaian Preprocessing & Augmentasi untuk SimCLR
+Untuk memastikan dataset kompatibel dengan *pipeline* PyTorch dan menjaga integritas fitur medis pada metode *Self-Supervised Learning* (SimCLR), dilakukan penyesuaian berikut:
+
+### 1. Preprocessing Struktur File & Direktori
 * **Perataan Direktori (Flat Directory):** Mengeluarkan gambar dari dalam folder masing-masing pasien sehingga struktur akhirnya langsung merujuk pada kelas (contoh: `train/Normal/image.jpg`).
 * **Hanya Menggunakan Citra `.jpg`:** File anotasi `.png` (masking tepi) tidak diikutsertakan ke dalam *DataLoader*. Jika file `.png` ikut masuk ke dalam pipeline augmentasi SSL, fungsi *contrastive loss* (NT-Xent) akan mempelajari fitur garis buatan yang salah, bukan tekstur biologis asli lesi serviks. *(Catatan: File `.png` ini dapat dimanfaatkan nanti jika diperlukan preprocessing ekstraksi Region of Interest menggunakan OpenCV).*
+
+### 2. Domain Adaptation pada Augmentasi Visual
+Augmentasi standar SimCLR dirancang untuk citra objek umum (ImageNet) dan terbukti terlalu agresif untuk citra medis. Oleh karena itu, dilakukan modifikasi:
+* **Penghapusan *Random Grayscale*:** Augmentasi *grayscale* sepenuhnya dihilangkan. Merujuk pada penelitian Hu et al. (2019) dan Azizi et al. (2021), fitur diagnostik utama lesi pra-kanker (seperti reaksi *acetowhite* dan vaskularisasi) sangat bergantung pada spektrum warna. Pengubahan ke hitam-putih akan menghapus sinyal biologis krusial ini dan menyatukan kontras antara jaringan sehat dengan lesi.
+* **Pembatasan Ekstrim pada *Color Jitter (Hue)*:** Nilai rotasi warna (*hue*) ditekan ke batas minimum (`0.02`). Sesuai temuan Tellez et al. (2019), pergeseran spektrum warna yang tinggi akan merepresentasikan jaringan biologis yang mustahil ada secara alamiah (misalnya serviks berwarna hijau/biru neon). Hal ini akan menyebabkan model SimCLR mempelajari distribusi fitur *noise* yang salah.
 
 ## Mekanisme Pelatihan & Checkpointing (SimCLR)
 Pada fase *pre-training* SimCLR yang bersifat *unsupervised*, model menggunakan mekanisme pengawasan metrik evaluasi kustom untuk memastikan model belajar dengan optimal:
