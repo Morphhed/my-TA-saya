@@ -1,7 +1,7 @@
 import os
 
 # 1. PATH UTAMA DATASET GABUNGAN
-EXTERNAL_DRIVE = r"C:\TA\malhari + anno"
+EXTERNAL_DRIVE = r"E:\batch 8\SSL CERVIX V2\malhari + anno"
 
 # 2. PATH FOLDER TRAIN (Berisi subfolder 'Abnormal' dan 'Normal')
 RAW_DATA_DIR = os.path.join(EXTERNAL_DRIVE, 'train')
