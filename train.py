@@ -79,7 +79,7 @@ def main():
     
     optimizer = configure_optimizer(model, LEARNING_RATE, weight_decay=WEIGHT)
     
-    steps_per_epoch = len(dataloader) // ACC_STEP # Karena ACC_STEP=1, sama dengan len(dataloader)
+    steps_per_epoch = len(dataloader) // ACC_STEP
     warmup_steps = WARMUP * steps_per_epoch
     cosine_steps = (EPOCHS - WARMUP) * steps_per_epoch
     
@@ -150,7 +150,7 @@ def main():
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
-		        scheduler.step() 
+                scheduler.step()
             
             total_loss += (loss.item() * ACCUMULATION_STEPS)
             global_step += 1
