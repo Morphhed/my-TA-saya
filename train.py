@@ -150,7 +150,7 @@ def main():
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
-		scheduler.step() 
+		        scheduler.step() 
             
             total_loss += (loss.item() * ACCUMULATION_STEPS)
             global_step += 1
