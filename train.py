@@ -79,13 +79,17 @@ def main():
     
     optimizer = configure_optimizer(model, LEARNING_RATE, weight_decay=WEIGHT)
     
-    warmup_epochs = WARMUP
-    warmup_scheduler = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_epochs)
-    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=(EPOCHS - warmup_epochs), eta_min=1e-6)
+    steps_per_epoch = len(dataloader) // ACC_STEP # Karena ACC_STEP=1, sama dengan len(dataloader)
+    warmup_steps = WARMUP * steps_per_epoch
+    cosine_steps = (EPOCHS - WARMUP) * steps_per_epoch
+    
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.01, total_iters=warmup_steps)
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=cosine_steps, eta_min=1e-5)
+    
     scheduler = SequentialLR(
         optimizer, 
         schedulers=[warmup_scheduler, cosine_scheduler], 
-        milestones=[warmup_epochs]
+        milestones=[warmup_steps]
     )
     
     scaler = torch.cuda.amp.GradScaler()
@@ -145,7 +149,8 @@ def main():
                 
                 scaler.step(optimizer)
                 scaler.update()
-                optimizer.zero_grad() 
+                optimizer.zero_grad()
+		scheduler.step() 
             
             total_loss += (loss.item() * ACCUMULATION_STEPS)
             global_step += 1
@@ -160,9 +165,7 @@ def main():
         avg_loss = total_loss / len(dataloader)
         current_lr = scheduler.get_last_lr()[0]
         print(f"=== Akhir Epoch {epoch+1} | Rata-rata Loss: {avg_loss:.4f} | LR: {current_lr:.6f} ===")
-        
-        scheduler.step()
-        
+                
         # 6. PENGECEKAN EARLY STOPPING DAN SAVE BEST MODEL
         is_best = early_stopping(avg_loss)
         

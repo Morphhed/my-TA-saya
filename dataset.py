@@ -26,7 +26,7 @@ class SimCLRDataset(Dataset):
 
 def get_simclr_transforms():
     return transforms.Compose([
-        transforms.RandomResizedCrop(size=224, scale=(0.4, 1.0)),
+        transforms.RandomResizedCrop(size=224, scale=(0.7, 1.0)),
         transforms.RandomRotation(degrees=360),                      
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),

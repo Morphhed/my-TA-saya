@@ -14,12 +14,12 @@ CHECKPOINT_DIR = os.path.join(EXTERNAL_DRIVE, 'checkpoints')
 PATCH_SIZE = 256
 BATCH_SIZE = 128
 EPOCHS = 100
-LEARNING_RATE = 5e-4      
+LEARNING_RATE = 3e-4      
 TEMPERATURE = 0.5        
 WEIGHT = 1e-2
 WARMUP = 10  
 WORKERS = 8
-ACC_STEP = 1
+ACC_STEP = 2
 
 # Buat folder output jika belum ada
 os.makedirs(PATCH_DATA_DIR, exist_ok=True)
