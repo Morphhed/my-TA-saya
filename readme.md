@@ -12,12 +12,11 @@ Repositori ini berisi skrip Python untuk melakukan evaluasi kualitas representas
 
 ## Metrik Evaluasi Medis
 
-1. **Accuracy**: Persentase total tebakan prediksi kelas lesi yang benar.
-2. **Precision, Recall, & F1-Score (Weighted)**: Mengukur ketepatan dan sensitivitas diagnosis yang disesuaikan dengan proporsi distribusi data (*imbalanced dataset*).
-3. **Sensitivity & Specificity (Macro)**: Standar emas diagnosis medis untuk menilai kemampuan mendeteksi lesi secara tepat (sensitivitas) dan mengenali jaringan serviks normal (spesifisitas).
-4. **ROC-AUC (OvR, Weighted)**: Mengukur kemampuan separabilitas *backbone* dalam membedakan antar tingkat keparahan lesi.
-5. **Quadratic Weighted Kappa (QWK)**: Metrik ordinal paling krusial yang memberikan penalti bertingkat pada kesalahan prediksi klasifikasi lesi pra-kanker (`Type 1` -> `Type 2` vs `Type 1` -> `Type 3`).
-6. **Confusion Matrix Heatmap**: Visualisasi matriks prediksi vs ground truth yang disajikan dan disimpan otomatis sebagai berkas `.png` resolusi tinggi (300 DPI) untuk setiap *checkpoint*.
+1. **Accuracy**: Persentase total tebakan prediksi kelas lesi yang benar secara keseluruhan.
+2. **Precision, Recall, & F1-Score (Weighted)**: Mengukur ketepatan dan sensitivitas diagnosis klasifikasi biner (Normal vs Abnormal) yang disesuaikan dengan proporsi distribusi data (*imbalanced dataset*).
+3. **Sensitivity & Specificity (Macro)**: Standar emas diagnosis medis untuk menilai kemampuan mendeteksi lesi abnormal secara tepat (sensitivitas) dan mengenali jaringan serviks normal (spesifisitas).
+4. **ROC-AUC**: Area under the ROC curve untuk mengevaluasi seberapa baik representasi fitur *backbone* dalam memisahkan probabilitas kelas Normal dan Abnormal.
+5. **Confusion Matrix Heatmap**: Visualisasi matriks prediksi vs ground truth (Normal & Abnormal) yang disajikan dan disimpan otomatis sebagai berkas `.png` resolusi tinggi (300 DPI) untuk setiap *checkpoint*.
 
 ---
 

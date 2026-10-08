@@ -108,11 +108,15 @@ def evaluate_knn(model, train_loader, test_loader, device, num_classes, model_na
     prec, rec, f1, _ = precision_recall_fscore_support(y_test, all_preds, average='weighted', zero_division=0)
     
     try:
-        auc = roc_auc_score(y_test, all_probs, multi_class='ovr', average='weighted')
+        if num_classes == 2:
+            auc = roc_auc_score(y_test, all_probs[:, 1])
+        else:
+            auc = roc_auc_score(y_test, all_probs, multi_class='ovr', average='weighted')
     except ValueError:
         auc = float('nan') 
         
-    qwk = cohen_kappa_score(y_test, all_preds, weights='quadratic')
+    # Opsional: Hilangkan parameter weights='quadratic' karena tidak relevan untuk 2 kelas
+    qwk = cohen_kappa_score(y_test, all_preds)
     cm = confusion_matrix(y_test, all_preds)
     sens, spec = calculate_sensitivity_specificity(cm, num_classes)
 
@@ -150,7 +154,7 @@ def evaluate_knn(model, train_loader, test_loader, device, num_classes, model_na
 # =====================================================================
 if __name__ == "__main__":
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    NUM_CLASSES = 3  
+    NUM_CLASSES = 2  
     
     # >>> PENTING: ISI FOLDER DATA LATIH (TRAIN) ANDA DI SINI <<<
     # KNN butuh data latih (gambar berlabel dari proses pre-training) sebagai patokan
