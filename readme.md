@@ -22,13 +22,8 @@ Repositori ini berisi skrip Python untuk melakukan evaluasi kualitas representas
 
 ## Cara Penggunaan
 
-### 1. Persiapan Dataset Uji (Opsional)
-Jika berkas gambar uji masih menyatu dalam satu folder, jalankan skrip pemisah dataset uji berlabel CSV:
-```bash
-python test_split.py
-```
 
-### 2. Konfigurasi Path Eksperimen
+### 1. Konfigurasi Path Eksperimen
 Buka berkas **`eval_path.py`** dan sesuaikan direktori eksperimen serta dataset Anda:
 ```python
 # Path dataset
@@ -40,7 +35,7 @@ BASE_MODEL_DIR = r"D:\TA BOS\training ssl"
 EXPERIMENT_FOLDER = "tunigan 1"
 ```
 
-### 3. Menjalankan Evaluasi KNN Berantai
+### 2. Menjalankan Evaluasi KNN Berantai
 Jalankan skrip evaluasi utama untuk memindai dan mengevaluasi seluruh berkas `.pth` di folder target:
 ```bash
 python evaluation.py
