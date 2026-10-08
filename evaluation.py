@@ -21,7 +21,10 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Import target folder dari eval_path 
-from eval_path import TARGET_FOLDER_PATH, TEST_DATA, TRAIN_DATA
+from eval_path import TARGET_FOLDER_PATH, TEST_DATA, TRAIN_DATA, HASIL_DIR
+
+# Pastikan folder hasil ada
+os.makedirs(HASIL_DIR, exist_ok=True)
 
 # =====================================================================
 # 1. BUNGKUSAN MODEL UNTUK EKSTRAKSI FITUR SIMCLR
@@ -115,12 +118,29 @@ def evaluate_knn(model, train_loader, test_loader, device, num_classes, model_na
     except ValueError:
         auc = float('nan') 
         
-    # Opsional: Hilangkan parameter weights='quadratic' karena tidak relevan untuk 2 kelas
-    qwk = cohen_kappa_score(y_test, all_preds)
     cm = confusion_matrix(y_test, all_preds)
     sens, spec = calculate_sensitivity_specificity(cm, num_classes)
 
-    # --- CETAK LAPORAN ---
+    # --- SIMPAN LAPORAN KE TXT ---
+    report_output_name = f"Report_KNN_{model_name.replace('.pth', '')}.txt"
+    report_path = os.path.join(HASIL_DIR, report_output_name)
+    
+    with open(report_path, "w") as f:
+        f.write("=" * 55 + "\n")
+        f.write(f" HASIL EVALUASI KNN: {model_name} \n")
+        f.write("=" * 55 + "\n")
+        f.write(f"Accuracy                   : {acc:.4f}\n")
+        f.write(f"Precision (Weighted)       : {prec:.4f}\n")
+        f.write(f"Recall (Weighted)          : {rec:.4f}\n")
+        f.write(f"F1-Score (Weighted)        : {f1:.4f}\n")
+        f.write(f"Sensitivity (Macro)        : {sens:.4f}\n")
+        f.write(f"Specificity (Macro)        : {spec:.4f}\n")
+        f.write(f"ROC-AUC                    : {auc:.4f}\n")
+        f.write("=" * 55 + "\n\n")
+        f.write("Classification Report Rinci per Kelas:\n")
+        f.write(classification_report(y_test, all_preds, target_names=class_names, zero_division=0))
+
+    # --- CETAK LAPORAN KE TERMINAL ---
     print("\n" + "=" * 55)
     print(f" HASIL EVALUASI KNN: {model_name} ")
     print("=" * 55)
@@ -130,11 +150,11 @@ def evaluate_knn(model, train_loader, test_loader, device, num_classes, model_na
     print(f"F1-Score (Weighted)        : {f1:.4f}")
     print(f"Sensitivity (Macro)        : {sens:.4f}")
     print(f"Specificity (Macro)        : {spec:.4f}")
-    print(f"ROC-AUC (OvR, Weighted)    : {auc:.4f}")
-    print(f"Quadratic Weighted Kappa   : {qwk:.4f}")
+    print(f"ROC-AUC                    : {auc:.4f}")
     print("=" * 55)
     print("\nClassification Report Rinci per Kelas:")
     print(classification_report(y_test, all_preds, target_names=class_names, zero_division=0))
+    print(f"\n[Info] Laporan teks disimpan ke: {report_path}")
 
     # --- PLOT & SIMPAN CONFUSION MATRIX ---
     plt.figure(figsize=(8, 6))
@@ -144,9 +164,10 @@ def evaluate_knn(model, train_loader, test_loader, device, num_classes, model_na
     plt.xlabel('Label Prediksi (Predicted)', fontsize=12)
     
     output_img_name = f"CM_KNN_{model_name.replace('.pth', '')}.png"
+    cm_path = os.path.join(HASIL_DIR, output_img_name)
     plt.tight_layout()
-    plt.savefig(output_img_name, dpi=300)
-    print(f"Visualisasi disimpan sebagai '{output_img_name}'")
+    plt.savefig(cm_path, dpi=300)
+    print(f"[Info] Visualisasi Confusion Matrix disimpan ke: {cm_path}")
     plt.close()
 
 # =====================================================================
