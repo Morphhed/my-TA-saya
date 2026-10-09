@@ -1,6 +1,6 @@
 # Dokumentasi Dataset: Malhari & AnnoCerv (Base dari "Tuning-Kedua")
 
-Proyek klasifikasi kanker serviks ini (menggunakan ResNet-50 + CBAM + SimCLR) menggunakan gabungan dataset klinis/kolposkopi dari dua sumber publik untuk menghasilkan klasifikasi biner (**Normal** vs **Abnormal**).
+Proyek klasifikasi kanker serviks ini (menggunakan ResNet-50 + CBAM + SimCLR) menggunakan gabungan dataset klinis/kolposkopi dari dua sumber publik untuk menghasilkan klasifikasi biner (**Normal** vs **Abnormal**). yang dari sebelumnya menggunakan dataset Intel
 
 ## Sumber Dataset
 * **Malhari Dataset:** Dataset citra klinis kanker serviks ([Mendeley Data](https://data.mendeley.com/datasets/m5kxdj7m36/1)).
@@ -23,23 +23,21 @@ File citra `.jpg` dari masing-masing dataset disatukan berdasarkan kelasnya (Nor
 * **Train (80%):** Untuk *pre-training* SSL dan *fine-tuning* model.
 * **Test (20%):** Disisihkan khusus untuk evaluasi metrik akhir.
 
-## Penyesuaian Preprocessing & Augmentasi untuk SimCLR
-Untuk memastikan dataset kompatibel dengan *pipeline* PyTorch dan menjaga integritas fitur medis pada metode *Self-Supervised Learning* (SimCLR), dilakukan penyesuaian berikut:
+## Preprocessing & Augmentasi SimCLR
 
-### 1. Preprocessing Struktur File & Direktori
-* **Perataan Direktori (Flat Directory):** Mengeluarkan gambar dari dalam folder masing-masing pasien sehingga struktur akhirnya langsung merujuk pada kelas (contoh: `train/Normal/image.jpg`).
-* **Hanya Menggunakan Citra `.jpg`:** File anotasi `.png` (masking tepi) tidak diikutsertakan ke dalam *DataLoader*. Jika file `.png` ikut masuk ke dalam pipeline augmentasi SSL, fungsi *contrastive loss* (NT-Xent) akan mempelajari fitur garis buatan yang salah, bukan tekstur biologis asli lesi serviks. *(Catatan: File `.png` ini dapat dimanfaatkan nanti jika diperlukan preprocessing ekstraksi Region of Interest menggunakan OpenCV).*
+### 1. Struktur Data & Format
+- **Flat Directory:** setelah pemetaan (normal vs abnormal) File gambar disusun langsung berdasarkan folder kelas (misal: `train/Normal/image.jpg`).
+- **Filter `.jpg` Murni (AnnoCerv):** Mengabaikan file anotasi `.png` agar fungsi *NT-Xent Loss* tidak mempelajari fitur garis *masking* buatan.
 
-### 2. Domain Adaptation pada Augmentasi Visual
-Augmentasi standar SimCLR dirancang untuk citra objek umum (ImageNet) dan terbukti terlalu agresif untuk citra medis. Oleh karena itu, dilakukan modifikasi:
-* **Penghapusan *Random Grayscale*:** Augmentasi *grayscale* sepenuhnya dihilangkan. Merujuk pada penelitian Hu et al. (2019) dan Azizi et al. (2021), fitur diagnostik utama lesi pra-kanker (seperti reaksi *acetowhite* dan vaskularisasi) sangat bergantung pada spektrum warna. Pengubahan ke hitam-putih akan menghapus sinyal biologis krusial ini dan menyatukan kontras antara jaringan sehat dengan lesi.
-* **Pembatasan Ekstrim pada *Color Jitter (Hue)*:** Nilai rotasi warna (*hue*) ditekan ke batas minimum (`0.02`). Sesuai temuan Tellez et al. (2019), pergeseran spektrum warna yang tinggi akan merepresentasikan jaringan biologis yang mustahil ada secara alamiah (misalnya serviks berwarna hijau/biru neon). Hal ini akan menyebabkan model SimCLR mempelajari distribusi fitur *noise* yang salah.
-* **Modifikasi Crop Scale untuk *Preservasi Inti Sel*:** Rentang pemotongan RandomResizedCrop dipersempit dari (0.4, 1.0) menjadi (0.7, 1.0). Pada sitologi/kolposkopi, rasio inti sel terhadap sitoplasma adalah diagnostik utama. Membatasi pemotongan di minimal 70% mencegah model salah menginterpretasikan dua area gambar yang kehilangan konteks inti selnya (mencegah false positive pairs).
+### 2. Augmentasi Khusus Citra Medis
+- **Tanpa Grayscale:** Mempertahankan warna asli untuk preservasi fitur vaskularisasi dan reaksi *acetowhite*.
+- **Hue Jitter Dibatasi (0.02):** Mencegah pergeseran warna yang tidak alamiah pada jaringan biologis.
+- **Crop Scale (0.7 - 1.0):** Menjaga integritas rasio inti sel terhadap sitoplasma agar tidak kehilangan konteks diagnostik.
 
-## Mekanisme Pelatihan & Checkpointing (SimCLR)
-Pada fase *pre-training* SimCLR yang bersifat *unsupervised*, model menggunakan mekanisme pengawasan metrik evaluasi kustom untuk memastikan model belajar dengan optimal:
-* **Pembaruan Skala Learning Rate & Scheduler:** Base learning rate ditetapkan pada angka moderat 3e-4 untuk mencegah overshooting. Selain itu, jadwal penurunan Cosine Annealing dimodifikasi dari perhitungan per-epoch menjadi per-batch (step-based scheduling) dengan batas bawah learning rate (eta_min) sebesar 1e-5.
-* **Penyesuaian Gradient Accumulation:** Nilai *accumulation steps* diturunkan menjadi 2 dari 4 karena ukuran dataset yang jauh lebih kecil.
-* **Early Stopping & Pemantauan NT-Xent Loss:** Pelatihan memantau rata-rata *loss* setiap *epoch*. Jika *loss* tidak mengalami penurunan selama 12 *epoch* berturut-turut (*patience* = 12), *training* akan dihentikan otomatis untuk mencegah *overfitting* dan membuang waktu komputasi.
-* **Stop at Best:** Sistem secara otomatis menyimpan bobot *backbone* ResNet-50 terbaik setiap kali rekor *loss* terendah tercapai (disimpan sebagai `simclr_best_epoch_X.pth`).
-* **Seamless Resume:** *State* dari pelatihan disimpan secara berkala ke dalam file `latestcheck.pth`. File ini tidak hanya mengamankan bobot model dan *optimizer*, tetapi juga menyimpan nilai `best_loss` dan hitungan *early stop counter*. Hal ini memastikan bahwa jika proses *training* terputus, pelatihan dapat dilanjutkan persis dari titik terakhirnya tanpa mereset memori *Early Stopping*.
+## Mekanisme Pelatihan & Checkpointing
+
+- **Hyperparameter:** Learning rate `3e-4`, *step-based* Cosine Annealing (`eta_min = 1e-5`), dan *gradient accumulation steps* = 2.
+- **Early Stopping:** Pelatihan dihentikan otomatis jika *loss* tidak turun selama 12 *epoch* berturut-turut (*patience* = 12).
+- **Mekanisme Checkpoint:**
+  - `simclr_best_epoch_X.pth`: Menyimpan bobot *backbone* ResNet-50 dengan *loss* terendah.
+  - `latestcheck.pth`: Menyimpan *state* lengkap (model, *optimizer*, `best_loss`, & *early stop counter*) untuk fitur *seamless resume*.
