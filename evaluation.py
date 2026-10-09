@@ -21,7 +21,7 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Import target folder dari eval_path 
-from eval_path import TARGET_FOLDER_PATH, TEST_DATA, TRAIN_DATA, HASIL_DIR
+from eval_path import EXPERIMENT_FOLDER, TEST_DATA, TRAIN_DATA, HASIL_DIR
 
 # Pastikan folder hasil ada
 os.makedirs(HASIL_DIR, exist_ok=True)
@@ -197,10 +197,10 @@ if __name__ == "__main__":
     dataloader_train = DataLoader(train_dataset, batch_size=64, shuffle=False, num_workers=2)
     dataloader_test = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=2)
 
-    if not os.path.exists(TARGET_FOLDER_PATH):
-        print(f"[Error] Folder tidak ditemukan: {TARGET_FOLDER_PATH}")
+    if not os.path.exists(EXPERIMENT_FOLDER):
+        print(f"[Error] Folder tidak ditemukan: {EXPERIMENT_FOLDER}")
     else:
-        pth_files = glob.glob(os.path.join(TARGET_FOLDER_PATH, "*.pth"))
+        pth_files = glob.glob(os.path.join(EXPERIMENT_FOLDER, "*.pth"))
         pth_files.sort(key=os.path.getmtime)
         
         for file_path in pth_files:

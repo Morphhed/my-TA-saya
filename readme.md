@@ -22,20 +22,7 @@ Repositori ini berisi skrip Python untuk melakukan evaluasi kualitas representas
 
 ## Cara Penggunaan
 
-
-### 1. Konfigurasi Path Eksperimen
-Buka berkas **`eval_path.py`** dan sesuaikan direktori eksperimen serta dataset Anda:
-```python
-# Path dataset
-TRAIN_DATA = r"C:\TA\intel-mobileodt-cervical-cancer-screening\train"
-TEST_DATA  = r"C:\TA\dataset_Test"
-
-# Path folder checkpoint eksperimen
-BASE_MODEL_DIR = r"D:\TA BOS\training ssl"
-EXPERIMENT_FOLDER = "tunigan 1"
-```
-
-### 2. Menjalankan Evaluasi KNN Berantai
+### Menjalankan Evaluasi KNN Berantai
 Jalankan skrip evaluasi utama untuk memindai dan mengevaluasi seluruh berkas `.pth` di folder target:
 ```bash
 python evaluation.py
