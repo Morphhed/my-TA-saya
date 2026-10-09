@@ -41,3 +41,11 @@ File citra `.jpg` dari masing-masing dataset disatukan berdasarkan kelasnya (Nor
 - **Mekanisme Checkpoint:**
   - `simclr_best_epoch_X.pth`: Menyimpan bobot *backbone* ResNet-50 dengan *loss* terendah.
   - `latestcheck.pth`: Menyimpan *state* lengkap (model, *optimizer*, `best_loss`, & *early stop counter*) untuk fitur *seamless resume*.
+
+## Instalasi & Repository
+
+Gunakan perintah berikut untuk melakukan *clone* langsung pada *branch* `Malhari-Anno`:
+
+```bash
+git clone -b Malhari-Anno https://github.com/Morphhed/my-TA-saya.git Malhari-Anno
+```
