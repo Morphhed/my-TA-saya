@@ -42,6 +42,20 @@ File citra `.jpg` dari masing-masing dataset disatukan berdasarkan kelasnya (Nor
   - `simclr_best_epoch_X.pth`: Menyimpan bobot *backbone* ResNet-50 dengan *loss* terendah.
   - `latestcheck.pth`: Menyimpan *state* lengkap (model, *optimizer*, `best_loss`, & *early stop counter*) untuk fitur *seamless resume*.
 
+
+# Finetune and Comparisons
+Pada tahap ini, *Projection Head* dari SimCLR dibuang. Lapisan atensi **CBAM** disuntikkan tepat setelah *layer* konvolusi terakhir (`layer4`, 2048 *channels*) pada ResNet-50.
+
+**Eksperimen Komparasi dilakukan pada dua model:**
+1. `ResNet50_USULAN_Dengan_SimCLR_dan_CBAM`: Menggunakan inisialisasi bobot *pre-trained* hasil SimCLR.
+2. `ResNet50_BASELINE_Tanpa_SimCLR_Dengan_CBAM`: Menggunakan inisialisasi bobot standar (ImageNet).
+
+### Strategi Pelatihan (2-Phase Fine-Tuning)
+Guna mencegah lonjakan gradien merusak bobot representasi fitur SimCLR yang sudah matang, pelatihan dilakukan dalam dua tahap adaptasi:
+* **Fase 1 (Warm-Up):** Seluruh *backbone* ResNet-50 dikunci (*frozen*). Model hanya melatih modul CBAM dan *Fully Connected Layer* yang bobot awalnya masih acak selama 2 *epoch*.
+* **Fase 2 (Full Fine-Tuning):** Seluruh jaringan dilepas kuncinya (*unfrozen*). Model dilatih secara *end-to-end* dengan *Learning Rate* yang diturunkan secara drastis (hanya 10% dari *base learning rate*) agar dapat beradaptasi halus pada fitur klasifikasi serviks medis.
+
+
 ## Instalasi & Repository
 
 Gunakan perintah berikut untuk melakukan *clone* langsung pada *branch* `Malhari-Anno`:
