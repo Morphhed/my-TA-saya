@@ -45,8 +45,7 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
     HASIL_DIR = os.path.join(EXTERNAL_DRIVE, "hasil_finetune")
     os.makedirs(HASIL_DIR, exist_ok=True)
     model_save_path = os.path.join(HASIL_DIR, f"{model_name}_finetuned_best.pth")
-    
-    best_test_acc = 0.0  Tracking akurasi terbaik pada data uji
+    best_test_acc = 0.0  # Tracking akurasi terbaik pada data uji
 
     # ----------------------------------------------------
     # TAHAP 1: WARM-UP
