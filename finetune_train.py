@@ -130,7 +130,7 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
         if val_acc > best_test_acc:
             best_test_acc = val_acc
             torch.save(model.state_dict(), model_save_path)
-            print(f"🌟 [Checkpoint] Model Terbaik Baru Disimpan! (Akurasi: {best_test_acc:.4f})")
+            print(f"[Checkpoint] Model Terbaik Baru Disimpan! (Akurasi: {best_test_acc:.4f})")
 
     # ----------------------------------------------------
     # EVALUASI AKHIR MENGGUNAKAN BOBOT TERBAIK YANG TERSIMPAN
