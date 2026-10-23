@@ -66,5 +66,10 @@ def get_baseline_model_cbam(num_classes=2):
     pretrained_base = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
     pretrained_dict = pretrained_base.state_dict()
     
+
+    if 'fc.weight' in pretrained_dict:
+        del pretrained_dict['fc.weight']
+    if 'fc.bias' in pretrained_dict:
+        del pretrained_dict['fc.bias']
     model.load_state_dict(pretrained_dict, strict=False)
     return model
