@@ -14,7 +14,7 @@ VALID_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tif', '.tiff'}
 
 def process_single_image(args):
     """
-    Fungsi worker untuk memotong (crop) satu gambar menjadi beberapa patch dengan overlap (stride).
+    Fungsi worker untuk memotong satu gambar menjadi patch tanpa overlap.
     """
     img_path, output_dir, patch_size = args
     parent_folder = img_path.parent.name

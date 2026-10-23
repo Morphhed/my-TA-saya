@@ -1,5 +1,8 @@
 import os
 import glob
+import re
+import random
+import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,239 +10,412 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
-from tqdm import tqdm  
-from sklearn.metrics import (
-    accuracy_score, precision_recall_fscore_support, 
-    roc_auc_score, confusion_matrix, classification_report
-)
+from torch.utils.data import DataLoader, Subset
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix, classification_report
+from tqdm import tqdm
 
 from finetune_model import get_simclr_model_cbam, get_baseline_model_cbam
-from config import EXTERNAL_DRIVE, RAW_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, LEARNING_RATE, WEIGHT, WORKERS
+from config import EXTERNAL_DRIVE, RAW_DATA_DIR, CHECKPOINT_DIR, FINETUNE_BATCH_SIZE, LEARNING_RATE, WEIGHT, WORKERS, FINETUNE_VAL_RATIO, SEED
 
-def calculate_sensitivity_specificity(cm, num_classes):
-    sensitivities, specificities = [], []
-    for i in range(num_classes):
-        tp = cm[i, i]
-        fn = np.sum(cm[i, :]) - tp
-        fp = np.sum(cm[:, i]) - tp
-        tn = np.sum(cm) - (tp + fp + fn)
-        
-        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-        
-        sensitivities.append(sensitivity)
-        specificities.append(specificity)
-    return np.mean(sensitivities), np.mean(specificities)
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
-def train_and_evaluate(model, model_name, train_loader, test_loader, device, epochs=50, warmup_epochs=2):
-    print(f"\n{'='*50}")
-    print(f"[{model_name}] Memulai Pelatihan Fine-Tuning dengan Validasi Berkala")
-    print(f"{'='*50}")
-    
-    model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
-    scaler = torch.cuda.amp.GradScaler()
-    
-    HASIL_DIR = os.path.join(EXTERNAL_DRIVE, "hasil_finetune")
-    os.makedirs(HASIL_DIR, exist_ok=True)
-    model_save_path = os.path.join(HASIL_DIR, f"{model_name}_finetuned_best.pth")
-    best_test_acc = 0.0  # Tracking akurasi terbaik pada data uji
+def find_best_simclr_checkpoint(folder):
+    files = glob.glob(os.path.join(folder, "simclr_best_epoch_*.pth"))
+    if not files:
+        raise FileNotFoundError(f"Checkpoint SimCLR tidak ditemukan di {folder}")
 
-    # ----------------------------------------------------
-    # TAHAP 1: WARM-UP
-    # ----------------------------------------------------
-    print(f"\n>>> [Fase 1] Warm-up: Membekukan backbone untuk adaptasi CBAM...")
-    for name, param in model.named_parameters():
-        if "cbam" in name or "fc" in name:
-            param.requires_grad = True
-        else:
-            param.requires_grad = False
-            
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = optim.AdamW(trainable_params, lr=LEARNING_RATE, weight_decay=WEIGHT)
-    
-    for epoch in range(warmup_epochs):
-        model.train()
-        running_loss = 0.0
-        
-        pbar = tqdm(train_loader, desc=f"Warm-up Epoch [{epoch+1}/{warmup_epochs}]")
-        for inputs, labels in pbar:
-            inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
-            optimizer.zero_grad()
-            
-            with torch.cuda.amp.autocast():
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
-            running_loss += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
-            
-        print(f"Selesai Warm-up Epoch [{epoch+1}/{warmup_epochs}] | Rata-rata Loss: {running_loss/len(train_loader):.4f}")
+    def epoch_number(path):
+        match = re.search(r"simclr_best_epoch_(\d+)\.pth$", os.path.basename(path))
+        return int(match.group(1)) if match else -1
 
-    # ----------------------------------------------------
-    # TAHAP 2: FULL FINE-TUNING + VALIDASI BERKALA PER EPOCH
-    # ----------------------------------------------------
-    print(f"\n>>> [Fase 2] Full Fine-Tuning dengan Evaluasi Berkala...")
-    for param in model.parameters():
-        param.requires_grad = True
-        
-    fine_tune_lr = LEARNING_RATE * 0.1 
-    optimizer = optim.AdamW(model.parameters(), lr=fine_tune_lr, weight_decay=WEIGHT)
-    
-    for epoch in range(warmup_epochs, epochs):
-        model.train()
-        running_loss = 0.0
-        
-        pbar = tqdm(train_loader, desc=f"Fine-Tuning Epoch [{epoch+1}/{epochs}]")
-        for inputs, labels in pbar:
-            inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
-            optimizer.zero_grad()
-            
-            with torch.cuda.amp.autocast():
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            
-            running_loss += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
-            
-        # --- VALIDASI DI SETIAP AKHIR EPOCH ---
-        model.eval()
-        val_preds, val_labels = [], []
-        with torch.no_grad():
-            for v_inputs, v_labels in test_loader:
-                v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
-                v_outputs = model(v_inputs)
-                _, v_preds_tensor = torch.max(v_outputs, 1)
-                val_preds.extend(v_preds_tensor.cpu().numpy())
-                val_labels.extend(v_labels.cpu().numpy())
-                
-        val_acc = accuracy_score(val_labels, val_preds)
-        print(f"Selesai Epoch [{epoch+1}/{epochs}] | Loss: {running_loss/len(train_loader):.4f} | Test Acc: {val_acc:.4f}")
-        
-        # Simpan model jika mendapati akurasi pengujian teringgi sejauh ini
-        if val_acc > best_test_acc:
-            best_test_acc = val_acc
-            torch.save(model.state_dict(), model_save_path)
-            print(f"[Checkpoint] Model Terbaik Baru Disimpan! (Akurasi: {best_test_acc:.4f})")
+    return max(files, key=epoch_number)
 
-    # ----------------------------------------------------
-    # EVALUASI AKHIR MENGGUNAKAN BOBOT TERBAIK YANG TERSIMPAN
-    # ----------------------------------------------------
-    print(f"\n[{model_name}] Memuat ulang model terbaik (Akurasi Test: {best_test_acc:.4f}) untuk Evaluasi Akhir...")
-    model.load_state_dict(torch.load(model_save_path))
+def calculate_sensitivity_specificity(y_true, y_pred, normal_idx, abnormal_idx):
+    cm = confusion_matrix(y_true, y_pred, labels=[normal_idx, abnormal_idx])
+    tn, fp, fn, tp = cm.ravel()
+    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    return sensitivity, specificity, cm
+
+def freeze_backbone_batchnorm(model):
+    for name, module in model.named_modules():
+        if isinstance(module, nn.BatchNorm2d) and not name.startswith("cbam"):
+            module.eval()
+
+def predict(model, loader, device, abnormal_idx):
     model.eval()
-    
     all_preds, all_labels, all_probs = [], [], []
+
     with torch.no_grad():
-        for inputs, labels in test_loader:
+        for inputs, labels in loader:
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
             outputs = model(inputs)
             probs = F.softmax(outputs, dim=1)
-            _, preds = torch.max(outputs, 1)
-            
+            preds = torch.argmax(outputs, dim=1)
+
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
-            all_probs.extend(probs[:, 1].cpu().numpy())
-            
-    acc = accuracy_score(all_labels, all_preds)
-    prec, rec, f1, _ = precision_recall_fscore_support(all_labels, all_preds, average='weighted', zero_division=0)
-    
+            all_probs.extend(probs[:, abnormal_idx].cpu().numpy())
+
+    return np.array(all_labels), np.array(all_preds), np.array(all_probs)
+
+def evaluate_validation(model, loader, device, abnormal_idx):
+    labels, preds, probs = predict(model, loader, device, abnormal_idx)
+    acc = accuracy_score(labels, preds)
+    binary_labels = (labels == abnormal_idx).astype(int)
+
     try:
-        auc = roc_auc_score(all_labels, all_probs)
+        auc = roc_auc_score(binary_labels, probs)
     except ValueError:
-        auc = float('nan') 
-        
-    cm = confusion_matrix(all_labels, all_preds)
-    sens, spec = calculate_sensitivity_specificity(cm, num_classes=2)
-    class_names = ["Normal", "Abnormal"]
-    
-    # Cetak Terminal & Simpan Laporan
-    print("\n" + "=" * 55)
-    print(f" HASIL EVALUASI AKHIR TERBAIK: {model_name} ")
-    print("=" * 55)
+        auc = float("nan")
+
+    return acc, auc
+
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, freeze_bn=False, description="Train"):
+    model.train()
+
+    if freeze_bn:
+        freeze_backbone_batchnorm(model)
+
+    running_loss = 0.0
+    pbar = tqdm(loader, desc=description)
+
+    for inputs, labels in pbar:
+        inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
+
+        optimizer.zero_grad()
+
+        with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        running_loss += loss.item()
+        pbar.set_postfix(loss=f"{loss.item():.4f}")
+
+    return running_loss / len(loader)
+
+def train_and_evaluate(model, model_name, train_loader, val_loader, test_loader, class_to_idx, device, epochs=50, warmup_epochs=5):
+    print("\n" + "=" * 60)
+    print(f"TRAINING: {model_name}")
+    print("=" * 60)
+
+    normal_idx = class_to_idx["Normal"]
+    abnormal_idx = class_to_idx["Abnormal"]
+
+    print(f"Class mapping: {class_to_idx}")
+    print(f"Normal index: {normal_idx} | Abnormal index: {abnormal_idx}")
+
+    model = model.to(device)
+    criterion = nn.CrossEntropyLoss()
+    scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
+
+    hasil_dir = os.path.join(EXTERNAL_DRIVE, "hasil_finetune_simclr")
+    os.makedirs(hasil_dir, exist_ok=True)
+
+    model_save_path = os.path.join(hasil_dir, f"{model_name}_finetuned_best.pth")
+    best_val_score = -float("inf")
+
+    for name, param in model.named_parameters():
+        param.requires_grad = ("cbam" in name or "fc" in name)
+
+    warmup_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.AdamW(warmup_params, lr=LEARNING_RATE, weight_decay=WEIGHT)
+
+    print("\n>>> Fase 1: Warm-up CBAM + FC")
+
+    for epoch in range(warmup_epochs):
+        train_loss = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scaler,
+            device,
+            freeze_bn=True,
+            description=f"Warm-up [{epoch+1}/{warmup_epochs}]"
+        )
+
+        val_acc, val_auc = evaluate_validation(model, val_loader, device, abnormal_idx)
+        score = val_auc if not np.isnan(val_auc) else val_acc
+
+        print(f"Warm-up Epoch [{epoch+1}/{warmup_epochs}] | Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | Val AUC: {val_auc:.4f}")
+
+        if score > best_val_score:
+            best_val_score = score
+            torch.save(model.state_dict(), model_save_path)
+            print(f"[Checkpoint] Best validation score: {best_val_score:.4f}")
+
+    for param in model.parameters():
+        param.requires_grad = True
+
+    optimizer = optim.AdamW([
+        {
+            "params": itertools.chain(
+                model.conv1.parameters(),
+                model.bn1.parameters(),
+                model.layer1.parameters(),
+                model.layer2.parameters()
+            ),
+            "lr": 1e-6
+        },
+        {
+            "params": model.layer3.parameters(),
+            "lr": 5e-6
+        },
+        {
+            "params": model.layer4.parameters(),
+            "lr": 1e-5
+        },
+        {
+            "params": model.cbam.parameters(),
+            "lr": 1e-4
+        },
+        {
+            "params": model.fc.parameters(),
+            "lr": 3e-4
+        }
+    ], weight_decay=WEIGHT)
+
+    print("\n>>> Fase 2: Full Fine-Tuning")
+
+    for epoch in range(warmup_epochs, epochs):
+        train_loss = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scaler,
+            device,
+            freeze_bn=False,
+            description=f"Fine-tuning [{epoch+1}/{epochs}]"
+        )
+
+        val_acc, val_auc = evaluate_validation(model, val_loader, device, abnormal_idx)
+        score = val_auc if not np.isnan(val_auc) else val_acc
+
+        print(f"Epoch [{epoch+1}/{epochs}] | Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | Val AUC: {val_auc:.4f}")
+
+        if score > best_val_score:
+            best_val_score = score
+            torch.save(model.state_dict(), model_save_path)
+            print(f"[Checkpoint] Best validation score: {best_val_score:.4f}")
+
+    print(f"\nMemuat model terbaik berdasarkan validation score: {best_val_score:.4f}")
+
+    model.load_state_dict(torch.load(model_save_path, map_location=device))
+
+    all_labels, all_preds, all_probs = predict(model, test_loader, device, abnormal_idx)
+
+    acc = accuracy_score(all_labels, all_preds)
+
+    prec, rec, f1, _ = precision_recall_fscore_support(
+        all_labels,
+        all_preds,
+        average="weighted",
+        zero_division=0
+    )
+
+    binary_labels = (all_labels == abnormal_idx).astype(int)
+
+    try:
+        auc = roc_auc_score(binary_labels, all_probs)
+    except ValueError:
+        auc = float("nan")
+
+    sens, spec, cm = calculate_sensitivity_specificity(
+        all_labels,
+        all_preds,
+        normal_idx,
+        abnormal_idx
+    )
+
+    report = classification_report(
+        all_labels,
+        all_preds,
+        labels=[normal_idx, abnormal_idx],
+        target_names=["Normal", "Abnormal"],
+        digits=4,
+        zero_division=0
+    )
+
+    print("\n" + "=" * 60)
+    print(f"HASIL EVALUASI FINAL TEST: {model_name}")
+    print("=" * 60)
     print(f"Accuracy                   : {acc:.4f}")
     print(f"Precision (Weighted)       : {prec:.4f}")
     print(f"Recall (Weighted)          : {rec:.4f}")
     print(f"F1-Score (Weighted)        : {f1:.4f}")
-    print(f"Sensitivity (Macro)        : {sens:.4f}")
-    print(f"Specificity (Macro)        : {spec:.4f}")
+    print(f"Sensitivity (Abnormal)     : {sens:.4f}")
+    print(f"Specificity (Normal)       : {spec:.4f}")
     print(f"ROC-AUC                    : {auc:.4f}")
-    print("=" * 55)
-    
-    report_path = os.path.join(HASIL_DIR, f"Report_{model_name}.txt")
+    print("=" * 60)
+    print("\nClassification Report:")
+    print(report)
+
+    report_path = os.path.join(hasil_dir, f"Report_{model_name}.txt")
+
     with open(report_path, "w") as f:
-        f.write("=" * 55 + "\n")
-        f.write(f" HASIL EVALUASI AKHIR TERBAIK: {model_name} \n")
-        f.write("=" * 55 + "\n")
+        f.write("=" * 60 + "\n")
+        f.write(f"HASIL EVALUASI FINAL TEST: {model_name}\n")
+        f.write("=" * 60 + "\n")
         f.write(f"Accuracy                   : {acc:.4f}\n")
         f.write(f"Precision (Weighted)       : {prec:.4f}\n")
         f.write(f"Recall (Weighted)          : {rec:.4f}\n")
         f.write(f"F1-Score (Weighted)        : {f1:.4f}\n")
-        f.write(f"Sensitivity (Macro)        : {sens:.4f}\n")
-        f.write(f"Specificity (Macro)        : {spec:.4f}\n")
-        f.write(f"ROC-AUC                    : {auc:.4f}\n")
-        f.write("=" * 55 + "\n\n")
+        f.write(f"Sensitivity (Abnormal)     : {sens:.4f}\n")
+        f.write(f"Specificity (Normal)       : {spec:.4f}\n")
+        f.write(f"ROC-AUC                    : {auc:.4f}\n\n")
         f.write("Classification Report:\n")
-        f.write(classification_report(all_labels, all_preds, target_names=class_names, digits=4, zero_division=0))
-    
+        f.write(report)
+
     plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, xticklabels=class_names, yticklabels=class_names)
-    plt.title(f'Confusion Matrix - {model_name}', pad=20, fontsize=14)
-    plt.ylabel('Label Sebenarnya (True)', fontsize=12)
-    plt.xlabel('Label Prediksi (Predicted)', fontsize=12)
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        cbar=False,
+        xticklabels=["Normal", "Abnormal"],
+        yticklabels=["Normal", "Abnormal"]
+    )
+
+    plt.title(f"Confusion Matrix - {model_name}")
+    plt.ylabel("True Label")
+    plt.xlabel("Predicted Label")
     plt.tight_layout()
-    plt.savefig(os.path.join(HASIL_DIR, f"CM_{model_name}.png"), dpi=300)
+    plt.savefig(os.path.join(hasil_dir, f"CM_{model_name}.png"), dpi=300)
     plt.close()
-    print(f"[Info] Seluruh artefak evaluasi terbaik disimpan ke folder: {HASIL_DIR}\n")
 
 if __name__ == "__main__":
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Menjalankan Fine-tuning di perangkat: {DEVICE}")
-    
-    TRAIN_DIR = RAW_DATA_DIR 
-    TEST_DIR = os.path.join(EXTERNAL_DRIVE, 'test')
-    
+    set_seed(SEED)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Fine-tuning device: {device}")
+
+    train_dir = RAW_DATA_DIR
+    test_dir = os.path.join(EXTERNAL_DRIVE, "test")
+
     train_transform = transforms.Compose([
         transforms.Resize((224, 224)),
-        transforms.RandomHorizontalFlip(),
+        transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomRotation(15),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize(
+            [0.485, 0.456, 0.406],
+            [0.229, 0.224, 0.225]
+        )
     ])
-    
-    test_transform = transforms.Compose([
+
+    eval_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize(
+            [0.485, 0.456, 0.406],
+            [0.229, 0.224, 0.225]
+        )
     ])
-    
-    train_loader = DataLoader(datasets.ImageFolder(TRAIN_DIR, train_transform), batch_size=BATCH_SIZE, shuffle=True, num_workers=WORKERS, pin_memory=True)
-    test_loader = DataLoader(datasets.ImageFolder(TEST_DIR, test_transform), batch_size=BATCH_SIZE, shuffle=False, num_workers=WORKERS, pin_memory=True)
 
-    pth_files = glob.glob(os.path.join(CHECKPOINT_DIR, "simclr_best_epoch_*.pth"))
-    
-    if pth_files:
-        latest_simclr_checkpoint = max(pth_files, key=os.path.getmtime)
-        print(f"[Info] Ditemukan bobot SimCLR: {os.path.basename(latest_simclr_checkpoint)}")
-        try:
-            simclr_finetune_model = get_simclr_model_cbam(latest_simclr_checkpoint)
-            train_and_evaluate(simclr_finetune_model, "ResNet50_USULAN_Dengan_SimCLR_dan_CBAM", train_loader, test_loader, DEVICE, epochs=50, warmup_epochs=2)
-        except Exception as e:
-            print(f"[Error] Gagal melatih model usulan: {e}")
-    else:
-        print("\n[Info] Tidak ada file bobot SimCLR (.pth) ditemukan di folder checkpoint.")
-        print("[Info] Skrip akan melompati pengujian model usulan dan langsung melatih Baseline.\n")
+    split_dataset = datasets.ImageFolder(train_dir)
 
-    print(f"[Info] Memuat model Baseline ImageNet...")
+    indices = np.arange(len(split_dataset))
+    targets = np.array(split_dataset.targets)
+
+    train_indices, val_indices = train_test_split(
+        indices,
+        test_size=FINETUNE_VAL_RATIO,
+        random_state=SEED,
+        shuffle=True,
+        stratify=targets
+    )
+
+    train_dataset_full = datasets.ImageFolder(train_dir, train_transform)
+    val_dataset_full = datasets.ImageFolder(train_dir, eval_transform)
+    test_dataset = datasets.ImageFolder(test_dir, eval_transform)
+
+    if train_dataset_full.class_to_idx != test_dataset.class_to_idx:
+        raise RuntimeError(
+            f"Mapping class train dan test berbeda: "
+            f"train={train_dataset_full.class_to_idx}, "
+            f"test={test_dataset.class_to_idx}"
+        )
+
+    train_dataset = Subset(train_dataset_full, train_indices)
+    val_dataset = Subset(val_dataset_full, val_indices)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=FINETUNE_BATCH_SIZE,
+        shuffle=True,
+        num_workers=WORKERS,
+        pin_memory=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=FINETUNE_BATCH_SIZE,
+        shuffle=False,
+        num_workers=WORKERS,
+        pin_memory=True
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=FINETUNE_BATCH_SIZE,
+        shuffle=False,
+        num_workers=WORKERS,
+        pin_memory=True
+    )
+
+    print(f"Train images : {len(train_dataset)}")
+    print(f"Val images   : {len(val_dataset)}")
+    print(f"Test images  : {len(test_dataset)}")
+    print(f"Class mapping: {test_dataset.class_to_idx}")
+
+    try:
+        best_simclr_checkpoint = find_best_simclr_checkpoint(CHECKPOINT_DIR)
+
+        print(f"\n[Info] Best bobot SimCLR: {os.path.basename(best_simclr_checkpoint)}")
+
+        simclr_model = get_simclr_model_cbam(best_simclr_checkpoint)
+
+        train_and_evaluate(
+            simclr_model,
+            "ResNet50_USULAN_Dengan_SimCLR_dan_CBAM",
+            train_loader,
+            val_loader,
+            test_loader,
+            test_dataset.class_to_idx,
+            device,
+            epochs=50,
+            warmup_epochs=5
+        )
+
+    except FileNotFoundError as e:
+        print(f"[Error] {e}")
+
+    print("\n[Info] Menjalankan baseline ImageNet + CBAM...")
+
     baseline_model = get_baseline_model_cbam()
-    train_and_evaluate(baseline_model, "ResNet50_BASELINE_Tanpa_SimCLR_Dengan_CBAM", train_loader, test_loader, DEVICE, epochs=50, warmup_epochs=2)
+
+    train_and_evaluate(
+        baseline_model,
+        "ResNet50_BASELINE_ImageNet_Dengan_CBAM",
+        train_loader,
+        val_loader,
+        test_loader,
+        test_dataset.class_to_idx,
+        device,
+        epochs=50,
+        warmup_epochs=5
+    )

@@ -1,75 +1,194 @@
-# Dokumentasi Dataset: Malhari & AnnoCerv (Base dari "Tuning-Kedua")
+# Klasifikasi Lesi Prakanker Cervix Menggunakan ResNet50 + SimCLR + CBAM (COMPLETE OVERHAUL)
 
-Proyek klasifikasi kanker serviks ini (menggunakan ResNet-50 + CBAM + SimCLR) menggunakan gabungan dataset klinis/kolposkopi dari dua sumber publik untuk menghasilkan klasifikasi biner (**Normal** vs **Abnormal**) yang dari sebelumnya menggunakan dataset Intel.
+Proyek ini mengembangkan klasifikasi biner citra *cervix* menggunakan **Self-Supervised Learning (SimCLR)** dengan backbone **ResNet50**, kemudian dilanjutkan dengan *fine-tuning* menggunakan **CBAM (Convolutional Block Attention Module)**.
+
+Dataset merupakan gabungan **Malhari** dan **AnnoCerv** yang dipetakan menjadi dua kelas:
+
+- **Normal**
+- **Abnormal**
+
+Total dataset yang digunakan adalah **666 citra**, dengan pembagian utama **80% data pengembangan** dan **20% independent test set**.
 
 ## Sumber Dataset
-- **Malhari Dataset:** Dataset citra klinis kanker serviks ([Mendeley Data](https://data.mendeley.com/datasets/m5kxdj7m36/1)).
-- **AnnoCerv Dataset:** Dataset citra kolposkopi beserta anotasi/masking ([GitHub](https://github.com/iclx/AnnoCerv)).
 
-## Dasar Klinis Pemetaan Kelas (Normal vs Abnormal)
+- **Malhari Dataset:** [Mendeley Data](https://data.mendeley.com/datasets/m5kxdj7m36/1)
+- **AnnoCerv Dataset:** [GitHub](https://github.com/iclx/AnnoCerv)
 
-**AnnoCerv (Berdasarkan Swede Score)**
+## Pemetaan Kelas
+
+### AnnoCerv
+
+Pemetaan dilakukan berdasarkan **Swede Score**:
+
 - **Normal:** Swede Score < 5
 - **Abnormal:** Swede Score ≥ 5
-> **Justifikasi:** Sesuai standar klinis (Strander et al., 2005; Bowring et al., 2010), Swede Score < 5 mengindikasikan lesi *low-risk* yang tidak memerlukan biopsi rutin. Skor ≥ 5 adalah ambang batas klinis (*cutoff*) pendeteksian lesi pra-kanker derajat tinggi (CIN2+) yang wajib dibiopsi.
 
-**Malhari (Berdasarkan Keparahan CIN)**
+Ambang Swede Score digunakan untuk memisahkan kelompok risiko rendah dan kelompok dengan indikasi lesi derajat lebih tinggi.
+
+### Malhari
+
+Pemetaan berdasarkan derajat CIN:
+
 - **Normal:** CIN 1
 - **Abnormal:** CIN 2 dan CIN 3
-> **Justifikasi:** Merujuk pada panduan ASCCP dan standar *benchmark ML*, klasifikasi ini menggunakan ambang batas CIN2+. CIN 1 dikategorikan *low-risk* karena dapat mengalami regresi spontan, sedangkan CIN 2+ adalah lesi *high-risk* yang memerlukan tindakan medis.
 
-## Preprocessing & Ekstraksi Patch
-Sebelum proses pelatihan, citra mentah diekstrak menjadi potongan (*patches*) berukuran 256x256 menggunakan teknik *sliding window* dengan *stride* untuk menghasilkan gambar yang tumpang tindih (overlap). Potongan gambar yang tidak relevan (sebagian besar berupa latar belakang dengan nilai rata-rata piksel > 240 atau < 20) akan dibuang secara otomatis. 
+Klasifikasi menggunakan batas **CIN2+** sebagai kelompok abnormal.
 
-Kumpulan data gabungan ini kemudian dibagi secara acak dengan rasio:
-- **Train (80%):** Untuk *pre-training* SSL dan *fine-tuning* model.
-- **Test (20%):** Disisihkan khusus untuk evaluasi metrik akhir.
+> Catatan: terminologi kelas `Normal` digunakan sebagai label eksperimen biner. Dalam interpretasi klinis, CIN1 lebih tepat dipandang sebagai kelompok *low-grade/low-risk* dibanding jaringan normal sepenuhnya.
 
-## Preprocessing & Augmentasi SimCLR
+## Pembagian Dataset
 
-### 1. Struktur Data & Format
-- **Flat Directory:** Setelah pemetaan (normal vs abnormal), file gambar disusun langsung berdasarkan folder kelas (misal: `train/Normal/image.jpg`).
-- **Filter `.jpg` Murni (AnnoCerv):** Mengabaikan file anotasi `.png` agar fungsi *NT-Xent Loss* tidak mempelajari fitur garis *masking* buatan.
+Dataset utama dibagi menjadi:
 
-### 2. Augmentasi Khusus Citra Medis
-- **Tanpa Grayscale:** Mempertahankan warna asli untuk preservasi fitur vaskularisasi dan reaksi *acetowhite*.
-- **Hue Jitter Dibatasi (0.02):** Mencegah pergeseran warna yang tidak alamiah pada jaringan biologis.
-- **Crop Scale (0.7 - 1.0):** Menjaga integritas rasio inti sel terhadap sitoplasma agar tidak kehilangan konteks diagnostik.
+```text
+666 citra
+│
+├── 80% Development Set
+│     ├── Training
+│     └── Validation
+│
+└── 20% Independent Test Set
+```
 
-## Mekanisme Pelatihan & Checkpointing
+**Test set tidak digunakan untuk memilih checkpoint selama training.** Test hanya digunakan setelah model terbaik ditentukan berdasarkan validation set.
 
-- **Hyperparameter:** Learning rate `3e-4`, *step-based* Cosine Annealing (`eta_min = 1e-5`), dan *gradient accumulation steps* = 2.
-- **Early Stopping:** Pelatihan dihentikan otomatis jika *loss* tidak turun selama 12 *epoch* berturut-turut (*patience* = 12).
-- **Mekanisme Checkpoint:**
-  - `simclr_best_epoch_X.pth`: Menyimpan bobot *backbone* ResNet-50 dengan *loss* terendah.
-  - `latestcheck.pth`: Menyimpan *state* lengkap (model, *optimizer*, `best_loss`, & *early stop counter*) untuk fitur *seamless resume*.
+Pada tahap *fine-tuning*, development set kembali dibagi secara **stratified** menjadi training dan validation.
 
-# Finetune and Comparisons
-Pada tahap ini, *Projection Head* dari SimCLR dibuang. Modul atensi **CBAM (Convolutional Block Attention Module)**—yang terdiri dari *Channel Attention* dan *Spatial Attention*—ditambahkan untuk mempertajam fokus model pada fitur yang paling relevan. Modul ini disuntikkan tepat setelah *layer* konvolusi terakhir (`layer4`, 2048 *channels*) pada ResNet-50. Output akhir model diakhiri dengan *Fully Connected Layer* baru untuk mendeteksi 2 kelas target.
+# Struktur/Strategi Trainingnya
 
-**Eksperimen Komparasi dilakukan pada dua model:**
-1. `ResNet50_USULAN_Dengan_SimCLR_dan_CBAM`: Menggunakan inisialisasi bobot *pre-trained* hasil SimCLR. Sistem akan secara otomatis mencari file bobot `.pth` terbaru di dalam folder *checkpoints*.
-2. `ResNet50_BASELINE_Tanpa_SimCLR_Dengan_CBAM`: Menggunakan inisialisasi bobot standar (ImageNet) sebagai pembanding performa dasar.
+## 1. Preprocessing dan Ekstraksi Patch
 
-### Strategi Pelatihan (2-Phase Fine-Tuning)
-Guna mencegah lonjakan gradien merusak bobot representasi fitur SimCLR yang sudah matang, pelatihan dilakukan dalam dua tahap adaptasi:
-- **Fase 1 (Warm-Up):** Seluruh *backbone* ResNet-50 dikunci (*frozen*). Model hanya melatih modul CBAM dan *Fully Connected Layer* yang bobot awalnya masih acak selama 2 *epoch*.
-- **Fase 2 (Full Fine-Tuning):** Seluruh jaringan dilepas kuncinya (*unfrozen*). Model dilatih secara *end-to-end* dengan *Learning Rate* yang diturunkan secara drastis (hanya 10% dari *base learning rate*) agar dapat beradaptasi halus pada fitur klasifikasi serviks medis.
+Pre-training SimCLR hanya menggunakan citra berformat **`.jpg`** dari development set. Setiap citra dipotong menjadi patch **256×256 piksel** menggunakan `stride=256`, sehingga patch tidak saling overlap. Patch dengan rata-rata intensitas **>240** atau **<20** dibuang untuk mengurangi area yang terlalu terang atau terlalu gelap.
 
-### Evaluasi dan Output Hasil
-Pengujian akhir menggunakan *test set* independen diukur melalui berbagai metrik evaluasi yang komprehensif, meliputi:
-- **Akurasi, Presisi (Weighted), Recall (Weighted), dan F1-Score (Weighted)**.
-- **Sensitivitas dan Spesifisitas (Macro):** Dihitung secara presisi melalui ekstraksi manual pada hasil *Confusion Matrix*.
-- **ROC-AUC Score**.
+Nama patch mempertahankan identitas gambar sumber dan koordinat pemotongan. Informasi ini digunakan ketika membagi patch menjadi SSL training dan validation agar patch dari gambar sumber yang sama tidak masuk ke dua subset berbeda.
 
-Seluruh metrik performa akan otomatis disimpan ke dalam direktori `hasil_finetune`. Artefak yang dihasilkan pada setiap eksperimen meliputi:
-- Laporan metrik mendetail (`Report_{model_name}.txt`).
-- Visualisasi matriks performa (`CM_{model_name}.png`).
-- Bobot model klasifikasi terbaik (`{model_name}_finetuned_best.pth`).
+## 2. Augmentasi SimCLR
+
+Setiap patch menghasilkan dua *augmented views* secara independen. Augmentasi menggunakan `RandomResizedCrop` menjadi **224×224** dengan `scale=(0.80, 1.00)` dan `ratio=(0.90, 1.10)`, `RandomHorizontalFlip(p=0.5)`, serta `RandomRotation(±20°)`.
+
+Variasi fotometrik menggunakan `ColorJitter` dengan **brightness=0.15, contrast=0.15, saturation=0.10, hue=0.01** dan probabilitas **0.5**. `GaussianBlur` menggunakan **kernel=5**, `sigma=(0.1, 1.0)`, dan probabilitas **0.2**. Vertical flip, elastic transformation, rotasi 360°, dan random grayscale tidak digunakan.
+
+Citra kemudian dinormalisasi menggunakan:
+
+```python
+mean = [0.485, 0.456, 0.406]
+std  = [0.229, 0.224, 0.225]
+```
+
+## 3. Arsitektur dan Pre-Training SimCLR
+
+Backbone menggunakan **ResNet50 tanpa bobot supervised ImageNet**. Fully Connected Layer bawaan diganti dengan `Identity`, sehingga backbone menghasilkan representasi fitur **2048 dimensi**. Projection Head menggunakan konfigurasi:
+
+```text
+2048 → 512 → 512 → 128
+```
+
+Dua layer pertama menggunakan `Linear → BatchNorm → ReLU`, sedangkan layer terakhir menghasilkan vektor proyeksi 128 dimensi. Projection Head hanya digunakan untuk menghitung contrastive loss dan dilepas setelah pre-training.
+
+Pre-training menggunakan **NT-Xent Loss** dengan `temperature=0.3`. Optimizer menggunakan **AdamW** dengan `learning_rate=3e-4` dan `weight_decay=1e-4`. Parameter bias dan parameter berdimensi satu tidak diberikan weight decay. Batch size adalah **128**, accumulation step **1**, dan training maksimum **100 epoch**.
+
+Learning rate menggunakan **Linear Warm-up selama 10 epoch** dengan `start_factor=0.01`, kemudian dilanjutkan dengan **Cosine Annealing** hingga `eta_min=1e-5`. Training menggunakan **Automatic Mixed Precision (AMP)** dan gradient clipping `max_norm=1.0`.
+
+## 4. SSL Validation dan Checkpoint
+
+Patch development dibagi menjadi **90% SSL training dan 10% SSL validation berdasarkan gambar sumber**. Checkpoint terbaik ditentukan berdasarkan **validation NT-Xent loss**, bukan training loss, hasil KNN, maupun test set.
+
+Early stopping menggunakan `patience=12`. Setiap kali validation loss mencapai nilai terbaik baru, backbone disimpan menggunakan format:
+
+```text
+simclr_best_epoch_X.pth
+```
+
+Nomor `X` menunjukkan epoch ketika validation loss terbaik tersebut diperoleh. Karena checkpoint hanya dibuat ketika validation loss membaik, checkpoint dengan nomor epoch terbesar merupakan **best checkpoint terakhir**.
+
+Pada akhir pre-training sistem menampilkan:
+
+```text
+Best Epoch
+Best Validation Loss
+Best Checkpoint
+```
+
+File `latestcheck.pth` digunakan untuk menyimpan state lengkap model, optimizer, scheduler, AMP scaler, dan status early stopping agar training dapat dilanjutkan apabila terhenti.
+
+## 5. Evaluasi Representasi SimCLR dengan KNN
+
+KNN digunakan **hanya untuk mengevaluasi kualitas representasi hasil pre-training SimCLR** dan tidak digunakan untuk menentukan checkpoint SimCLR. Backbone checkpoint terbaik dibekukan dan setiap citra diekstraksi menjadi fitur **2048 dimensi**, kemudian dinormalisasi menggunakan **L2 normalization**.
+
+Hyperparameter KNN dicari menggunakan **GridSearchCV dengan Stratified 5-Fold Cross-Validation** hanya pada development set. Parameter yang diuji adalah:
+
+```text
+n_neighbors : 3, 5, 7, 9, 11, 15, 21
+weights     : uniform, distance
+metric      : euclidean, manhattan, cosine
+scoring     : balanced_accuracy
+```
+
+Setelah parameter terbaik ditemukan, KNN dilatih menggunakan seluruh fitur development set dan dievaluasi satu kali menggunakan independent test set.
+
+## 6. Arsitektur Fine-Tuning
+
+Setelah pre-training selesai, Projection Head dilepaskan dan backbone ResNet50 dipindahkan ke model klasifikasi. **CBAM** ditempatkan setelah `layer4` ResNet50 yang menghasilkan **2048 channels**. CBAM menerapkan **Channel Attention** kemudian **Spatial Attention**, diikuti Global Average Pooling dan Fully Connected Layer dua kelas.
+
+Dua model dibandingkan. Model **ResNet50_USULAN_Dengan_SimCLR_dan_CBAM** menggunakan checkpoint backbone SimCLR terbaik, sedangkan **ResNet50_BASELINE_ImageNet_Dengan_CBAM** menggunakan ResNet50 dengan bobot supervised ImageNet. Kedua model menggunakan arsitektur CBAM dan strategi fine-tuning yang sama.
+
+## 7. Strategi Fine-Tuning
+
+Development set dibagi kembali secara *stratified* menjadi **80% training dan 20% validation** dengan `seed=42`. Fine-tuning menggunakan **batch size 32**, maksimum **50 epoch**, `CrossEntropyLoss`, **AdamW**, `weight_decay=1e-4`, dan AMP.
+
+Pada **fase warm-up selama 5 epoch**, backbone dibekukan dan hanya CBAM serta Fully Connected Layer yang dilatih menggunakan `learning_rate=3e-4`. BatchNorm backbone dipertahankan dalam mode evaluasi selama fase ini.
+
+Pada **full fine-tuning**, seluruh backbone dibuka dengan *discriminative learning rate*:
+
+```text
+conv1 + bn1 + layer1 + layer2 : 1e-6
+layer3                        : 5e-6
+layer4                        : 1e-5
+CBAM                          : 1e-4
+Fully Connected Layer         : 3e-4
+```
+
+Checkpoint klasifikasi terbaik dipilih berdasarkan **validation ROC-AUC**, dengan validation accuracy sebagai fallback apabila ROC-AUC tidak dapat dihitung. Independent test set hanya digunakan setelah checkpoint terbaik selesai ditentukan.
+
+## 8. Evaluasi Model
+
+Evaluasi akhir menggunakan **Accuracy, Weighted Precision, Weighted Recall, Weighted F1-Score, Sensitivity, Specificity, ROC-AUC, Classification Report**, dan **Confusion Matrix**.
+
+Kelas **Abnormal** didefinisikan sebagai positive class dan **Normal** sebagai negative class:
+
+```text
+Sensitivity = TP / (TP + FN)
+Specificity = TN / (TN + FP)
+```
+
+Mapping kelas mengikuti `ImageFolder.class_to_idx` dan tidak diasumsikan secara manual sehingga probabilitas ROC-AUC selalu diambil dari indeks kelas Abnormal yang sebenarnya.
+
+## 9. Grad-CAM
+
+Grad-CAM digunakan setelah fine-tuning untuk menganalisis area citra yang berkontribusi terhadap keputusan model. Grad-CAM tidak diterapkan pada KNN maupun backbone SimCLR mentah karena keduanya tidak memiliki class score dari classifier neural network.
+
+Target Grad-CAM adalah **blok terakhir `layer4` ResNet50**. Gradien kelas prediksi digunakan untuk memberikan bobot pada feature map, kemudian hasilnya diterapkan ReLU, dinormalisasi ke rentang 0–1, diperbesar menjadi ukuran input, dan ditumpangkan pada citra asli.
+
+Secara default dipilih **5 citra Normal dan 5 citra Abnormal** dari independent test set. Setiap hasil menampilkan citra asli, heatmap Grad-CAM, overlay, true label, predicted label, dan confidence score. Grad-CAM digunakan sebagai analisis kualitatif, bukan sebagai metrik performa klasifikasi.
+
+## 10. Urutan Eksperimen
+
+Eksperimen dijalankan secara berurutan sebagai berikut:
+
+```bash
+python preprocess.py
+python train.py
+python evaluation.py
+python finetune_train.py
+python gradcam.py
+```
+
+`preprocess.py` menghasilkan patch untuk SimCLR. `train.py` melakukan pre-training dan menentukan best epoch berdasarkan validation NT-Xent loss. `evaluation.py` mengevaluasi frozen representation menggunakan KNN + GridSearchCV. `finetune_train.py` melakukan fine-tuning model SimCLR + CBAM dan baseline ImageNet + CBAM. `gradcam.py` menghasilkan visualisasi interpretabilitas dari checkpoint hasil fine-tuning.
 
 ## Instalasi & Repository
 
-Gunakan perintah berikut untuk melakukan *clone* langsung pada *branch* `Malhari-Anno`:
+Clone repository:
 
 ```bash
-git clone -b Malhari-Anno [https://github.com/Morphhed/my-TA-saya.git](https://github.com/Morphhed/my-TA-saya.git) Malhari-Anno
+git clone -b Malhari-Anno https://github.com/Morphhed/my-TA-saya.git Malhari-Anno
+```
