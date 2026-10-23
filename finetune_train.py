@@ -15,13 +15,9 @@ from sklearn.metrics import (
     roc_auc_score, confusion_matrix, classification_report
 )
 
-# Mengimpor model dari file arsitektur baru Anda
 from finetune_model import get_simclr_model_cbam, get_baseline_model_cbam
 from config import EXTERNAL_DRIVE, RAW_DATA_DIR, CHECKPOINT_DIR, BATCH_SIZE, LEARNING_RATE, WEIGHT, WORKERS
 
-# =====================================================================
-# FUNGSI PERHITUNGAN MANUAL SENSITIVITAS & SPESIFISITAS
-# =====================================================================
 def calculate_sensitivity_specificity(cm, num_classes):
     sensitivities, specificities = [], []
     for i in range(num_classes):
@@ -39,13 +35,19 @@ def calculate_sensitivity_specificity(cm, num_classes):
 
 def train_and_evaluate(model, model_name, train_loader, test_loader, device, epochs=50, warmup_epochs=2):
     print(f"\n{'='*50}")
-    print(f"[{model_name}] Memulai Pelatihan Fine-Tuning")
+    print(f"[{model_name}] Memulai Pelatihan Fine-Tuning dengan Validasi Berkala")
     print(f"{'='*50}")
     
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     scaler = torch.cuda.amp.GradScaler()
     
+    HASIL_DIR = os.path.join(EXTERNAL_DRIVE, "hasil_finetune")
+    os.makedirs(HASIL_DIR, exist_ok=True)
+    model_save_path = os.path.join(HASIL_DIR, f"{model_name}_finetuned_best.pth")
+    
+    best_test_acc = 0.0  Tracking akurasi terbaik pada data uji
+
     # ----------------------------------------------------
     # TAHAP 1: WARM-UP
     # ----------------------------------------------------
@@ -82,9 +84,9 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
         print(f"Selesai Warm-up Epoch [{epoch+1}/{warmup_epochs}] | Rata-rata Loss: {running_loss/len(train_loader):.4f}")
 
     # ----------------------------------------------------
-    # TAHAP 2: FULL FINE-TUNING
+    # TAHAP 2: FULL FINE-TUNING + VALIDASI BERKALA PER EPOCH
     # ----------------------------------------------------
-    print(f"\n>>> [Fase 2] Full Fine-Tuning: Melepas kunci seluruh jaringan...")
+    print(f"\n>>> [Fase 2] Full Fine-Tuning dengan Evaluasi Berkala...")
     for param in model.parameters():
         param.requires_grad = True
         
@@ -111,17 +113,34 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
             running_loss += loss.item()
             pbar.set_postfix(loss=f"{loss.item():.4f}")
             
-        print(f"Selesai Fine-Tuning Epoch [{epoch+1}/{epochs}] | Rata-rata Loss: {running_loss/len(train_loader):.4f}")
+        # --- VALIDASI DI SETIAP AKHIR EPOCH ---
+        model.eval()
+        val_preds, val_labels = [], []
+        with torch.no_grad():
+            for v_inputs, v_labels in test_loader:
+                v_inputs, v_labels = v_inputs.to(device), v_labels.to(device)
+                v_outputs = model(v_inputs)
+                _, v_preds_tensor = torch.max(v_outputs, 1)
+                val_preds.extend(v_preds_tensor.cpu().numpy())
+                val_labels.extend(v_labels.cpu().numpy())
+                
+        val_acc = accuracy_score(val_labels, val_preds)
+        print(f"Selesai Epoch [{epoch+1}/{epochs}] | Loss: {running_loss/len(train_loader):.4f} | Test Acc: {val_acc:.4f}")
+        
+        # Simpan model jika mendapati akurasi pengujian teringgi sejauh ini
+        if val_acc > best_test_acc:
+            best_test_acc = val_acc
+            torch.save(model.state_dict(), model_save_path)
+            print(f"🌟 [Checkpoint] Model Terbaik Baru Disimpan! (Akurasi: {best_test_acc:.4f})")
 
     # ----------------------------------------------------
-    # EVALUASI METRIK AKHIR
+    # EVALUASI AKHIR MENGGUNAKAN BOBOT TERBAIK YANG TERSIMPAN
     # ----------------------------------------------------
-    print(f"\n[{model_name}] Mengevaluasi Model pada Data Uji...")
+    print(f"\n[{model_name}] Memuat ulang model terbaik (Akurasi Test: {best_test_acc:.4f}) untuk Evaluasi Akhir...")
+    model.load_state_dict(torch.load(model_save_path))
     model.eval()
-    all_preds = []
-    all_labels = []
-    all_probs = []
     
+    all_preds, all_labels, all_probs = [], [], []
     with torch.no_grad():
         for inputs, labels in test_loader:
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
@@ -144,13 +163,10 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
     cm = confusion_matrix(all_labels, all_preds)
     sens, spec = calculate_sensitivity_specificity(cm, num_classes=2)
     class_names = ["Normal", "Abnormal"]
-
-    HASIL_DIR = os.path.join(EXTERNAL_DRIVE, "hasil_finetune")
-    os.makedirs(HASIL_DIR, exist_ok=True)
     
-    # Cetak Terminal & Simpan TXT
+    # Cetak Terminal & Simpan Laporan
     print("\n" + "=" * 55)
-    print(f" HASIL EVALUASI: {model_name} ")
+    print(f" HASIL EVALUASI AKHIR TERBAIK: {model_name} ")
     print("=" * 55)
     print(f"Accuracy                   : {acc:.4f}")
     print(f"Precision (Weighted)       : {prec:.4f}")
@@ -161,11 +177,10 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
     print(f"ROC-AUC                    : {auc:.4f}")
     print("=" * 55)
     
-    report_output_name = f"Report_{model_name}.txt"
-    report_path = os.path.join(HASIL_DIR, report_output_name)
+    report_path = os.path.join(HASIL_DIR, f"Report_{model_name}.txt")
     with open(report_path, "w") as f:
         f.write("=" * 55 + "\n")
-        f.write(f" HASIL EVALUASI: {model_name} \n")
+        f.write(f" HASIL EVALUASI AKHIR TERBAIK: {model_name} \n")
         f.write("=" * 55 + "\n")
         f.write(f"Accuracy                   : {acc:.4f}\n")
         f.write(f"Precision (Weighted)       : {prec:.4f}\n")
@@ -178,24 +193,15 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
         f.write("Classification Report:\n")
         f.write(classification_report(all_labels, all_preds, target_names=class_names, digits=4, zero_division=0))
     
-    # Plot CM
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, xticklabels=class_names, yticklabels=class_names)
     plt.title(f'Confusion Matrix - {model_name}', pad=20, fontsize=14)
     plt.ylabel('Label Sebenarnya (True)', fontsize=12)
     plt.xlabel('Label Prediksi (Predicted)', fontsize=12)
-    
-    output_img_name = f"CM_{model_name}.png"
-    cm_path = os.path.join(HASIL_DIR, output_img_name)
     plt.tight_layout()
-    plt.savefig(cm_path, dpi=300)
+    plt.savefig(os.path.join(HASIL_DIR, f"CM_{model_name}.png"), dpi=300)
     plt.close()
-
-    # Simpan Bobot Model Fine-Tuning
-    model_output_name = f"{model_name}_finetuned_best.pth"
-    model_save_path = os.path.join(HASIL_DIR, model_output_name)
-    torch.save(model.state_dict(), model_save_path)
-    print(f"[Info] Bobot model Fine-Tuning berhasil disimpan ke: {model_save_path}\n")
+    print(f"[Info] Seluruh artefak evaluasi terbaik disimpan ke folder: {HASIL_DIR}\n")
 
 if __name__ == "__main__":
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -221,15 +227,11 @@ if __name__ == "__main__":
     train_loader = DataLoader(datasets.ImageFolder(TRAIN_DIR, train_transform), batch_size=BATCH_SIZE, shuffle=True, num_workers=WORKERS, pin_memory=True)
     test_loader = DataLoader(datasets.ImageFolder(TEST_DIR, test_transform), batch_size=BATCH_SIZE, shuffle=False, num_workers=WORKERS, pin_memory=True)
 
-    # =========================================================
-    # DETEKSI OTOMATIS FILE PRE-TRAIN (SIMCLR) DI CHECKPOINT_DIR
-    # =========================================================
     pth_files = glob.glob(os.path.join(CHECKPOINT_DIR, "simclr_best_epoch_*.pth"))
     
     if pth_files:
         latest_simclr_checkpoint = max(pth_files, key=os.path.getmtime)
         print(f"[Info] Ditemukan bobot SimCLR: {os.path.basename(latest_simclr_checkpoint)}")
-        
         try:
             simclr_finetune_model = get_simclr_model_cbam(latest_simclr_checkpoint)
             train_and_evaluate(simclr_finetune_model, "ResNet50_USULAN_Dengan_SimCLR_dan_CBAM", train_loader, test_loader, DEVICE, epochs=50, warmup_epochs=2)
@@ -239,9 +241,6 @@ if __name__ == "__main__":
         print("\n[Info] Tidak ada file bobot SimCLR (.pth) ditemukan di folder checkpoint.")
         print("[Info] Skrip akan melompati pengujian model usulan dan langsung melatih Baseline.\n")
 
-    # =========================================================
-    # EKSEKUSI MODEL BASELINE (IMAGENET)
-    # =========================================================
     print(f"[Info] Memuat model Baseline ImageNet...")
     baseline_model = get_baseline_model_cbam()
     train_and_evaluate(baseline_model, "ResNet50_BASELINE_Tanpa_SimCLR_Dengan_CBAM", train_loader, test_loader, DEVICE, epochs=50, warmup_epochs=2)
