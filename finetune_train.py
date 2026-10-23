@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
+from tqdm import tqdm  
 from sklearn.metrics import (
     accuracy_score, precision_recall_fscore_support, 
     roc_auc_score, confusion_matrix, classification_report
@@ -60,15 +61,20 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
     for epoch in range(warmup_epochs):
         model.train()
         running_loss = 0.0
-        for inputs, labels in train_loader:
+        
+        pbar = tqdm(train_loader, desc=f"Warm-up Epoch [{epoch+1}/{warmup_epochs}]")
+        for inputs, labels in pbar:
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+            
             running_loss += loss.item()
-        print(f"Warm-up Epoch [{epoch+1}/{warmup_epochs}] Loss: {running_loss/len(train_loader):.4f}")
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
+            
+        print(f"Selesai Warm-up Epoch [{epoch+1}/{warmup_epochs}] | Rata-rata Loss: {running_loss/len(train_loader):.4f}")
 
     # ----------------------------------------------------
     # TAHAP 2: FULL FINE-TUNING
@@ -83,15 +89,20 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
     for epoch in range(warmup_epochs, epochs):
         model.train()
         running_loss = 0.0
-        for inputs, labels in train_loader:
+        
+        pbar = tqdm(train_loader, desc=f"Fine-Tuning Epoch [{epoch+1}/{epochs}]")
+        for inputs, labels in pbar:
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+            
             running_loss += loss.item()
-        print(f"Fine-Tuning Epoch [{epoch+1}/{epochs}] Loss: {running_loss/len(train_loader):.4f}")
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
+            
+        print(f"Selesai Fine-Tuning Epoch [{epoch+1}/{epochs}] | Rata-rata Loss: {running_loss/len(train_loader):.4f}")
 
     # ----------------------------------------------------
     # EVALUASI METRIK AKHIR
@@ -207,7 +218,6 @@ if __name__ == "__main__":
     pth_files = glob.glob(os.path.join(CHECKPOINT_DIR, "simclr_best_epoch_*.pth"))
     
     if pth_files:
-        # Mengambil file yang terbaru dibuat/dimodifikasi
         latest_simclr_checkpoint = max(pth_files, key=os.path.getmtime)
         print(f"[Info] Ditemukan bobot SimCLR: {os.path.basename(latest_simclr_checkpoint)}")
         
@@ -226,4 +236,3 @@ if __name__ == "__main__":
     print(f"[Info] Memuat model Baseline ImageNet...")
     baseline_model = get_baseline_model_cbam()
     train_and_evaluate(baseline_model, "ResNet50_BASELINE_Tanpa_SimCLR_Dengan_CBAM", train_loader, test_loader, DEVICE, epochs=50, warmup_epochs=2)
-    
