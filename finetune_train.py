@@ -44,6 +44,7 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
     
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
+    scaler = torch.cuda.amp.GradScaler()
     
     # ----------------------------------------------------
     # TAHAP 1: WARM-UP
@@ -66,10 +67,14 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
         for inputs, labels in pbar:
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+            
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             
             running_loss += loss.item()
             pbar.set_postfix(loss=f"{loss.item():.4f}")
@@ -94,10 +99,14 @@ def train_and_evaluate(model, model_name, train_loader, test_loader, device, epo
         for inputs, labels in pbar:
             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+            
+            with torch.cuda.amp.autocast():
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             
             running_loss += loss.item()
             pbar.set_postfix(loss=f"{loss.item():.4f}")
