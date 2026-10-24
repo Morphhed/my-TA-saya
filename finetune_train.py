@@ -18,19 +18,21 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix, classification_report
 from tqdm import tqdm
 
-from finetune_model import get_simclr_model_cbam
+from finetune_model import get_simclr_model_cbam, get_baseline_model_cbam
 from config import EXTERNAL_DRIVE, RAW_DATA_DIR, CHECKPOINT_DIR, FINETUNE_BATCH_SIZE, LEARNING_RATE, WEIGHT, WORKERS, FINETUNE_VAL_RATIO, SEED
 
 VALID_STRATEGIES = {
     "frozen": "FT-A Frozen Backbone",
     "layer4": "FT-B Layer4 + CBAM + FC",
-    "full": "FT-C Full Fine-Tuning"
+    "full": "FT-C Full Fine-Tuning",
+    "baseline": "Baseline ImageNet + CBAM"
 }
 
 STRATEGY_NAMES = {
     "frozen": "ResNet50_USULAN_SimCLR_CBAM_FT_A_Frozen",
     "layer4": "ResNet50_USULAN_SimCLR_CBAM_FT_B_Layer4",
-    "full": "ResNet50_USULAN_SimCLR_CBAM_FT_C_Full"
+    "full": "ResNet50_USULAN_SimCLR_CBAM_FT_C_Full",
+    "baseline": "ResNet50_BASELINE_ImageNet_CBAM"
 }
 
 def get_finetune_strategy():
@@ -42,10 +44,12 @@ def get_finetune_strategy():
         print("  python finetune_train.py frozen")
         print("  python finetune_train.py layer4")
         print("  python finetune_train.py full")
+        print("  python finetune_train.py baseline")
         print("\nStrategi:")
         print("  frozen : FT-A - Frozen Backbone")
         print("  layer4 : FT-B - Layer4 + CBAM + FC")
         print("  full   : FT-C - Full Fine-Tuning")
+        print("  baseline : Baseline ImageNet + CBAM")
         print("=" * 70)
         sys.exit(1)
 
@@ -400,6 +404,31 @@ if __name__ == "__main__":
     print("=" * 70)
 
     try:
+    if FINETUNE_STRATEGY == "baseline":
+        print("\n" + "=" * 70)
+        print("BASELINE INITIALIZATION")
+        print("=" * 70)
+        print("Backbone : ResNet50 pretrained ImageNet")
+        print("Attention: CBAM")
+        print("Strategy : Full Fine-Tuning")
+        print("=" * 70)
+
+        model = get_baseline_model_cbam()
+
+        train_and_evaluate(
+            model,
+            STRATEGY_NAMES["baseline"],
+            train_loader,
+            val_loader,
+            test_loader,
+            test_dataset.class_to_idx,
+            device,
+            epochs=50,
+            warmup_epochs=5,
+            finetune_strategy="full"
+        )
+
+    else:
         best_simclr_checkpoint = find_best_simclr_checkpoint(CHECKPOINT_DIR)
 
         print("\n" + "=" * 70)
@@ -409,10 +438,10 @@ if __name__ == "__main__":
         print(f"Strategy   : {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
         print("=" * 70)
 
-        simclr_model = get_simclr_model_cbam(best_simclr_checkpoint)
+        model = get_simclr_model_cbam(best_simclr_checkpoint)
 
         train_and_evaluate(
-            simclr_model,
+            model,
             STRATEGY_NAMES[FINETUNE_STRATEGY],
             train_loader,
             val_loader,

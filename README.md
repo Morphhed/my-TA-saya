@@ -213,6 +213,17 @@ Secara ringkas, skenario yang digunakan adalah:
 FT-A : SimCLR backbone frozen + CBAM + FC
 FT-B : SimCLR layer4 + CBAM + FC
 FT-C : SimCLR full fine-tuning
+Baseline : ImageNet full fine-tuning + CBAM + FC
+```
+
+### Baseline — ImageNet + CBAM
+
+Baseline menggunakan backbone **ResNet50 pretrained ImageNet** dengan arsitektur CBAM dan classifier yang sama. Baseline menggunakan fase warm-up selama 5 epoch, kemudian dilanjutkan dengan **full fine-tuning** menggunakan discriminative learning rate yang sama dengan FT-C.
+
+Menjalankan baseline:
+
+```bash
+python finetune_train.py baseline
 ```
 
 Checkpoint terbaik pada setiap skenario dipilih berdasarkan **validation ROC-AUC**. Jika ROC-AUC tidak dapat dihitung, validation accuracy digunakan sebagai fallback. Independent test set hanya digunakan setelah checkpoint terbaik selesai ditentukan.
