@@ -404,54 +404,54 @@ if __name__ == "__main__":
     print("=" * 70)
 
     try:
-    if FINETUNE_STRATEGY == "baseline":
-        print("\n" + "=" * 70)
-        print("BASELINE INITIALIZATION")
-        print("=" * 70)
-        print("Backbone : ResNet50 pretrained ImageNet")
-        print("Attention: CBAM")
-        print("Strategy : Full Fine-Tuning")
-        print("=" * 70)
+        if FINETUNE_STRATEGY == "baseline":
+            print("\n" + "=" * 70)
+            print("BASELINE INITIALIZATION")
+            print("=" * 70)
+            print("Backbone : ResNet50 pretrained ImageNet")
+            print("Attention: CBAM")
+            print("Strategy : Full Fine-Tuning")
+            print("=" * 70)
 
-        model = get_baseline_model_cbam()
+            model = get_baseline_model_cbam()
 
-        train_and_evaluate(
-            model,
-            STRATEGY_NAMES["baseline"],
-            train_loader,
-            val_loader,
-            test_loader,
-            test_dataset.class_to_idx,
-            device,
-            epochs=50,
-            warmup_epochs=5,
-            finetune_strategy="full"
-        )
+            train_and_evaluate(
+                model,
+                STRATEGY_NAMES["baseline"],
+                train_loader,
+                val_loader,
+                test_loader,
+                test_dataset.class_to_idx,
+                device,
+                epochs=50,
+                warmup_epochs=5,
+                finetune_strategy="full"
+            )
 
-    else:
-        best_simclr_checkpoint = find_best_simclr_checkpoint(CHECKPOINT_DIR)
+        else:
+            best_simclr_checkpoint = find_best_simclr_checkpoint(CHECKPOINT_DIR)
 
-        print("\n" + "=" * 70)
-        print("SIMCLR INITIALIZATION")
-        print("=" * 70)
-        print(f"Checkpoint : {os.path.basename(best_simclr_checkpoint)}")
-        print(f"Strategy   : {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
-        print("=" * 70)
+            print("\n" + "=" * 70)
+            print("SIMCLR INITIALIZATION")
+            print("=" * 70)
+            print(f"Checkpoint : {os.path.basename(best_simclr_checkpoint)}")
+            print(f"Strategy   : {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
+            print("=" * 70)
 
-        model = get_simclr_model_cbam(best_simclr_checkpoint)
+            model = get_simclr_model_cbam(best_simclr_checkpoint)
 
-        train_and_evaluate(
-            model,
-            STRATEGY_NAMES[FINETUNE_STRATEGY],
-            train_loader,
-            val_loader,
-            test_loader,
-            test_dataset.class_to_idx,
-            device,
-            epochs=50,
-            warmup_epochs=5,
-            finetune_strategy=FINETUNE_STRATEGY
-        )
+            train_and_evaluate(
+                model,
+                STRATEGY_NAMES[FINETUNE_STRATEGY],
+                train_loader,
+                val_loader,
+                test_loader,
+                test_dataset.class_to_idx,
+                device,
+                epochs=50,
+                warmup_epochs=5,
+                finetune_strategy=FINETUNE_STRATEGY
+            )
 
     except (FileNotFoundError, ValueError) as e:
         print(f"[Error] {e}")
