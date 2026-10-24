@@ -33,29 +33,32 @@ STRATEGY_NAMES = {
     "full": "ResNet50_USULAN_SimCLR_CBAM_FT_C_Full"
 }
 
-if len(sys.argv) < 2:
-    print("\n" + "=" * 60)
-    print("FINETUNE STRATEGY BELUM DITENTUKAN")
-    print("=" * 60)
-    print("Gunakan salah satu perintah berikut:\n")
-    print("  python finetune_train.py frozen")
-    print("  python finetune_train.py layer4")
-    print("  python finetune_train.py full")
-    print("\nStrategi:")
-    print("  frozen : FT-A - Frozen Backbone")
-    print("  layer4 : FT-B - Layer4 + CBAM + FC")
-    print("  full   : FT-C - Full Fine-Tuning")
-    print("=" * 60)
-    sys.exit(1)
+def get_finetune_strategy():
+    if len(sys.argv) < 2:
+        print("\n" + "=" * 70)
+        print("FINE-TUNING STRATEGY BELUM DITENTUKAN")
+        print("=" * 70)
+        print("Gunakan salah satu perintah berikut:\n")
+        print("  python finetune_train.py frozen")
+        print("  python finetune_train.py layer4")
+        print("  python finetune_train.py full")
+        print("\nStrategi:")
+        print("  frozen : FT-A - Frozen Backbone")
+        print("  layer4 : FT-B - Layer4 + CBAM + FC")
+        print("  full   : FT-C - Full Fine-Tuning")
+        print("=" * 70)
+        sys.exit(1)
 
-FINETUNE_STRATEGY = sys.argv[1].lower()
+    strategy = sys.argv[1].lower()
 
-if FINETUNE_STRATEGY not in VALID_STRATEGIES:
-    print(f"\n[Error] Strategi tidak dikenal: {FINETUNE_STRATEGY}")
-    print("Gunakan salah satu dari: frozen, layer4, full")
-    sys.exit(1)
+    if strategy not in VALID_STRATEGIES:
+        print("\n" + "=" * 70)
+        print(f"[ERROR] Strategi tidak dikenal: {strategy}")
+        print("Gunakan salah satu dari: frozen, layer4, full")
+        print("=" * 70)
+        sys.exit(1)
 
-print(f"\n[Info] Fine-tuning strategy: {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
+    return strategy
 
 def set_seed(seed):
     random.seed(seed)
@@ -128,7 +131,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, freeze_
         inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
         optimizer.zero_grad()
 
-        with torch.cuda.amp.autocast(enabled=device.type == "cuda"):
+        with torch.amp.autocast(device_type=device.type, enabled=device.type == "cuda"):
             outputs = model(inputs)
             loss = criterion(outputs, labels)
 
@@ -211,7 +214,7 @@ def train_and_evaluate(model, model_name, train_loader, val_loader, test_loader,
 
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
-    scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
 
     hasil_dir = os.path.join(EXTERNAL_DRIVE, "hasil_finetune_simclr")
     os.makedirs(hasil_dir, exist_ok=True)
@@ -337,10 +340,18 @@ def train_and_evaluate(model, model_name, train_loader, val_loader, test_loader,
     print(f"[Info] Model disimpan : {model_save_path}")
 
 if __name__ == "__main__":
+    FINETUNE_STRATEGY = get_finetune_strategy()
+
     set_seed(SEED)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Fine-tuning device: {device}")
+
+    print("\n" + "=" * 70)
+    print("FINE-TUNING SIMCLR + CBAM")
+    print("=" * 70)
+    print(f"Device   : {device}")
+    print(f"Strategy : {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
+    print("=" * 70)
 
     train_dir = RAW_DATA_DIR
     test_dir = os.path.join(EXTERNAL_DRIVE, "test")
@@ -379,16 +390,24 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_dataset, batch_size=FINETUNE_BATCH_SIZE, shuffle=False, num_workers=WORKERS, pin_memory=True)
     test_loader = DataLoader(test_dataset, batch_size=FINETUNE_BATCH_SIZE, shuffle=False, num_workers=WORKERS, pin_memory=True)
 
-    print(f"Train images : {len(train_dataset)}")
-    print(f"Val images   : {len(val_dataset)}")
-    print(f"Test images  : {len(test_dataset)}")
-    print(f"Class mapping: {test_dataset.class_to_idx}")
+    print("\n" + "=" * 70)
+    print("DATASET")
+    print("=" * 70)
+    print(f"Train images  : {len(train_dataset)}")
+    print(f"Val images    : {len(val_dataset)}")
+    print(f"Test images   : {len(test_dataset)}")
+    print(f"Class mapping : {test_dataset.class_to_idx}")
+    print("=" * 70)
 
     try:
         best_simclr_checkpoint = find_best_simclr_checkpoint(CHECKPOINT_DIR)
 
-        print(f"\n[Info] Best bobot SimCLR: {os.path.basename(best_simclr_checkpoint)}")
-        print(f"[Info] Strategy          : {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
+        print("\n" + "=" * 70)
+        print("SIMCLR INITIALIZATION")
+        print("=" * 70)
+        print(f"Checkpoint : {os.path.basename(best_simclr_checkpoint)}")
+        print(f"Strategy   : {VALID_STRATEGIES[FINETUNE_STRATEGY]}")
+        print("=" * 70)
 
         simclr_model = get_simclr_model_cbam(best_simclr_checkpoint)
 
