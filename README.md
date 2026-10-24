@@ -126,29 +126,96 @@ scoring     : balanced_accuracy
 
 Setelah parameter terbaik ditemukan, KNN dilatih menggunakan seluruh fitur development set dan dievaluasi satu kali menggunakan independent test set.
 
-## 6. Arsitektur Fine-Tuning
 
-Setelah pre-training selesai, Projection Head dilepaskan dan backbone ResNet50 dipindahkan ke model klasifikasi. **CBAM** ditempatkan setelah `layer4` ResNet50 yang menghasilkan **2048 channels**. CBAM menerapkan **Channel Attention** kemudian **Spatial Attention**, diikuti Global Average Pooling dan Fully Connected Layer dua kelas.
+## 6. Arsitektur dan Skenario Fine-Tuning
 
-Dua model dibandingkan. Model **ResNet50_USULAN_Dengan_SimCLR_dan_CBAM** menggunakan checkpoint backbone SimCLR terbaik, sedangkan **ResNet50_BASELINE_ImageNet_Dengan_CBAM** menggunakan ResNet50 dengan bobot supervised ImageNet. Kedua model menggunakan arsitektur CBAM dan strategi fine-tuning yang sama.
+Setelah pre-training selesai, Projection Head dilepaskan dan backbone ResNet50 hasil SimCLR digunakan sebagai inisialisasi model klasifikasi. **CBAM** ditempatkan setelah `layer4` ResNet50 yang menghasilkan **2048 channels**, kemudian diikuti Global Average Pooling dan Fully Connected Layer untuk menghasilkan dua kelas, yaitu Normal dan Abnormal.
+
+Untuk mengetahui seberapa besar perubahan bobot backbone memengaruhi representasi hasil SimCLR, dilakukan tiga skenario fine-tuning. **FT-A** mempertahankan seluruh backbone ResNet50 dalam kondisi frozen dan hanya melatih CBAM serta Fully Connected Layer. **FT-B** mempertahankan `conv1` sampai `layer3` dalam kondisi frozen dan hanya membuka `layer4`, CBAM, serta Fully Connected Layer. **FT-C** merupakan skenario full fine-tuning, yaitu seluruh backbone dibuka dengan discriminative learning rate.
+
+Sebagai pembanding, digunakan **ResNet50_BASELINE_ImageNet_Dengan_CBAM** yang diinisialisasi menggunakan bobot supervised ImageNet. Baseline menggunakan arsitektur CBAM dan classifier yang sama, serta tetap menjalankan full fine-tuning.
 
 ## 7. Strategi Fine-Tuning
 
-Development set dibagi kembali secara *stratified* menjadi **80% training dan 20% validation** dengan `seed=42`. Fine-tuning menggunakan **batch size 32**, maksimum **50 epoch**, `CrossEntropyLoss`, **AdamW**, `weight_decay=1e-4`, dan AMP.
+Development set dibagi kembali secara *stratified* menjadi **80% training dan 20% validation** menggunakan `seed=42`. Seluruh skenario menggunakan **batch size 32**, maksimum **50 epoch**, `CrossEntropyLoss`, optimizer **AdamW**, `weight_decay=1e-4`, serta Automatic Mixed Precision (AMP).
 
-Pada **fase warm-up selama 5 epoch**, backbone dibekukan dan hanya CBAM serta Fully Connected Layer yang dilatih menggunakan `learning_rate=3e-4`. BatchNorm backbone dipertahankan dalam mode evaluasi selama fase ini.
+Pada **fase warm-up selama 5 epoch**, seluruh backbone ResNet50 dibekukan. Hanya CBAM dan Fully Connected Layer yang dilatih menggunakan `learning_rate=3e-4`. Setelah warm-up, strategi fine-tuning ditentukan melalui argumen command line saat menjalankan `finetune_train.py`. Program tidak akan memulai training apabila strategi tidak diberikan. Strategi yang tersedia adalah `frozen` untuk FT-A, `layer4` untuk FT-B, dan `full` untuk FT-C.
 
-Pada **full fine-tuning**, seluruh backbone dibuka dengan *discriminative learning rate*:
+### FT-A — Frozen Backbone
+
+Pada FT-A, seluruh backbone ResNet50 tetap dibekukan sampai akhir training. Hanya CBAM dan Fully Connected Layer yang diperbarui.
+
+```text
+ResNet50 Backbone = Frozen
+CBAM              = Train
+FC                = Train
+```
+
+Learning rate:
+
+```text
+CBAM : 1e-4
+FC   : 3e-4
+```
+
+Menjalankan FT-A pada Bash:
+
+```bash
+python finetune_train.py frozen
+```
+
+### FT-B — Partial Fine-Tuning Layer4
+
+Pada FT-B, `conv1`, `bn1`, `layer1`, `layer2`, dan `layer3` tetap dibekukan. Hanya `layer4`, CBAM, dan Fully Connected Layer yang diperbarui.
+
+```text
+conv1-layer3 = Frozen
+layer4       = Train
+CBAM         = Train
+FC           = Train
+```
+
+Learning rate:
+
+```text
+layer4 : 1e-5
+CBAM   : 1e-4
+FC     : 3e-4
+```
+
+Menjalankan FT-B pada Bash:
+
+```bash
+python finetune_train.py layer4
+```
+
+### FT-C — Full Fine-Tuning
+
+Pada FT-C, seluruh backbone ResNet50 dibuka dan dilatih menggunakan *discriminative learning rate*. Strategi ini digunakan untuk membandingkan dampak full fine-tuning terhadap representasi yang telah dipelajari SimCLR.
 
 ```text
 conv1 + bn1 + layer1 + layer2 : 1e-6
 layer3                        : 5e-6
 layer4                        : 1e-5
 CBAM                          : 1e-4
-Fully Connected Layer         : 3e-4
+FC                            : 3e-4
 ```
 
-Checkpoint klasifikasi terbaik dipilih berdasarkan **validation ROC-AUC**, dengan validation accuracy sebagai fallback apabila ROC-AUC tidak dapat dihitung. Independent test set hanya digunakan setelah checkpoint terbaik selesai ditentukan.
+Menjalankan FT-C pada Bash:
+
+```bash
+python finetune_train.py full
+```
+
+Secara ringkas, skenario yang digunakan adalah:
+
+```text
+FT-A : SimCLR backbone frozen + CBAM + FC
+FT-B : SimCLR layer4 + CBAM + FC
+FT-C : SimCLR full fine-tuning
+```
+
+Checkpoint terbaik pada setiap skenario dipilih berdasarkan **validation ROC-AUC**. Jika ROC-AUC tidak dapat dihitung, validation accuracy digunakan sebagai fallback. Independent test set hanya digunakan setelah checkpoint terbaik selesai ditentukan.
 
 ## 8. Evaluasi Model
 
@@ -179,11 +246,15 @@ Eksperimen dijalankan secara berurutan sebagai berikut:
 python preprocess.py
 python train.py
 python evaluation.py
-python finetune_train.py
+
+```
+"untuk fine tuning sendiri ada 3 strategi, refer back ke bagian 7. sebelum running gradcam"
+
+```bash
 python gradcam.py
 ```
 
-`preprocess.py` menghasilkan patch untuk SimCLR. `train.py` melakukan pre-training dan menentukan best epoch berdasarkan validation NT-Xent loss. `evaluation.py` mengevaluasi frozen representation menggunakan KNN + GridSearchCV. `finetune_train.py` melakukan fine-tuning model SimCLR + CBAM dan baseline ImageNet + CBAM. `gradcam.py` menghasilkan visualisasi interpretabilitas dari checkpoint hasil fine-tuning.
+`preprocess.py` menghasilkan patch untuk pre-training SimCLR. `train.py` melakukan pre-training dan menentukan checkpoint terbaik berdasarkan validation NT-Xent loss. `evaluation.py` mengevaluasi kualitas frozen representation menggunakan KNN dan GridSearchCV. `finetune_train.py` kemudian menjalankan skenario **FT-A**, **FT-B**, dan baseline ImageNet, sedangkan hasil **FT-C** digunakan sebagai pembanding full fine-tuning SimCLR. Setiap skenario menggunakan validation ROC-AUC untuk menentukan checkpoint klasifikasi terbaik. Setelah evaluasi akhir pada independent test set, `gradcam.py` digunakan untuk menghasilkan visualisasi interpretabilitas dari model fine-tuning yang dipilih.
 
 ## Instalasi & Repository
 
