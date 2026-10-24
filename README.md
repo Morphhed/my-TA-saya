@@ -85,7 +85,7 @@ Backbone menggunakan **ResNet50 tanpa bobot supervised ImageNet**. Fully Connect
 
 Dua layer pertama menggunakan `Linear → BatchNorm → ReLU`, sedangkan layer terakhir menghasilkan vektor proyeksi 128 dimensi. Projection Head hanya digunakan untuk menghitung contrastive loss dan dilepas setelah pre-training.
 
-Pre-training menggunakan **NT-Xent Loss** dengan `temperature=0.3`. Optimizer menggunakan **AdamW** dengan `learning_rate=3e-4` dan `weight_decay=1e-4`. Parameter bias dan parameter berdimensi satu tidak diberikan weight decay. Batch size adalah **128**, accumulation step **1**, dan training maksimum **100 epoch**.
+Pre-training menggunakan **NT-Xent Loss** dengan `temperature=0.3 dan 0.2`. Optimizer menggunakan **AdamW** dengan `learning_rate=3e-4` dan `weight_decay=1e-4`. Parameter bias dan parameter berdimensi satu tidak diberikan weight decay. Batch size adalah **128**, accumulation step **1**, dan training maksimum **100 epoch**.
 
 Learning rate menggunakan **Linear Warm-up selama 10 epoch** dengan `start_factor=0.01`, kemudian dilanjutkan dengan **Cosine Annealing** hingga `eta_min=1e-5`. Training menggunakan **Automatic Mixed Precision (AMP)** dan gradient clipping `max_norm=1.0`.
 
