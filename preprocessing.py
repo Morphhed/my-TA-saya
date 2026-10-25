@@ -11,8 +11,7 @@ import sys
 if str(MAIN_CODE_ROOT) not in sys.path:
     sys.path.insert(0, str(MAIN_CODE_ROOT))
 
-from dataset import get_simclr_transforms
-from preprocess import VALID_EXTENSIONS
+from dataset import get_simclr_transforms, VALID_EXTENSIONS
 
 MEAN = np.array([0.485, 0.456, 0.406])
 STD = np.array([0.229, 0.224, 0.225])

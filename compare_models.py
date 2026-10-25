@@ -3,7 +3,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 
-from bab4_config import FINETUNE_REPORTS, OUT_45, TEMPERATURE
+from config import FINETUNE_REPORTS, OUT_45, TEMPERATURE
 
 PATTERNS = {
     "Accuracy": r"Accuracy\s*:\s*([0-9.]+)",
