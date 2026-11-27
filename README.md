@@ -62,6 +62,24 @@ Pre-training SimCLR hanya menggunakan citra berformat **`.jpg`** dari developmen
 
 Nama patch mempertahankan identitas gambar sumber dan koordinat pemotongan. Informasi ini digunakan ketika membagi patch menjadi SSL training dan validation agar patch dari gambar sumber yang sama tidak masuk ke dua subset berbeda.
 
+### Basis Data Pre-Training
+
+Pre-training SimCLR bersifat **patch-based**:
+
+```text
+Full Development Image
+        ↓
+Patch 256×256
+        ↓
+Filtering Intensitas
+        ↓
+Patch Valid
+        ↓
+Pre-training SimCLR
+```
+
+Patch hanya digunakan untuk tahap pre-training. Independent test set tidak melalui proses patching.
+
 ## 2. Augmentasi SimCLR
 
 Setiap patch menghasilkan dua *augmented views* secara independen. Augmentasi menggunakan `RandomResizedCrop` menjadi **224×224** dengan `scale=(0.80, 1.00)` dan `ratio=(0.90, 1.10)`, `RandomHorizontalFlip(p=0.5)`, serta `RandomRotation(±20°)`.
@@ -73,6 +91,32 @@ Citra kemudian dinormalisasi menggunakan:
 ```python
 mean = [0.485, 0.456, 0.406]
 std  = [0.229, 0.224, 0.225]
+```
+
+### Cara Kerja Two-View SimCLR
+
+Setiap patch menghasilkan **dua augmented views secara independen**:
+
+```text
+                Patch A
+               /       \
+          View A1     View A2
+             ↓           ↓
+          ResNet50    ResNet50
+             ↓           ↓
+             z1          z2
+               \        /
+              NT-Xent Loss
+```
+
+`View A1` dan `View A2` merupakan **positive pair** karena berasal dari patch yang sama. View dari patch lain dalam mini-batch digunakan sebagai pasangan pembanding negatif.
+
+Dengan demikian, pre-training yang digunakan adalah:
+
+```text
+Patch-Based
++
+Two-View Contrastive Learning
 ```
 
 ## 3. Arsitektur dan Pre-Training SimCLR
@@ -88,6 +132,23 @@ Dua layer pertama menggunakan `Linear → BatchNorm → ReLU`, sedangkan layer t
 Pre-training menggunakan **NT-Xent Loss** dengan `temperature=0.3 dan 0.2`. Optimizer menggunakan **AdamW** dengan `learning_rate=3e-4` dan `weight_decay=1e-4`. Parameter bias dan parameter berdimensi satu tidak diberikan weight decay. Batch size adalah **128**, accumulation step **1**, dan training maksimum **100 epoch**.
 
 Learning rate menggunakan **Linear Warm-up selama 10 epoch** dengan `start_factor=0.01`, kemudian dilanjutkan dengan **Cosine Annealing** hingga `eta_min=1e-5`. Training menggunakan **Automatic Mixed Precision (AMP)** dan gradient clipping `max_norm=1.0`.
+
+### Cara Kerja Pre-Training
+
+```text
+Patch 256×256
+    ↓
+Two Augmented Views
+    ↓
+ResNet50 Backbone (shared weights)
+    ↓
+Representation 2048-D
+    ↓
+Projection Head
+2048 → 512 → 512 → 128
+    ↓
+NT-Xent Loss
+
 
 ## 4. SSL Validation dan Checkpoint
 
@@ -113,6 +174,24 @@ File `latestcheck.pth` digunakan untuk menyimpan state lengkap model, optimizer,
 
 ## 5. Evaluasi Representasi SimCLR dengan KNN
 
+### Basis Evaluasi KNN
+
+Berbeda dengan pre-training yang menggunakan patch, evaluasi KNN menggunakan **citra utuh**:
+
+```text
+Full Image
+    ↓
+Resize 224×224
+    ↓
+Frozen ResNet50 SimCLR
+    ↓
+2048-D Feature
+    ↓
+L2 Normalization
+    ↓
+KNN
+```
+
 KNN digunakan **hanya untuk mengevaluasi kualitas representasi hasil pre-training SimCLR** dan tidak digunakan untuk menentukan checkpoint SimCLR. Backbone checkpoint terbaik dibekukan dan setiap citra diekstraksi menjadi fitur **2048 dimensi**, kemudian dinormalisasi menggunakan **L2 normalization**.
 
 Hyperparameter KNN dicari menggunakan **GridSearchCV dengan Stratified 5-Fold Cross-Validation** hanya pada development set. Parameter yang diuji adalah:
@@ -129,6 +208,26 @@ Setelah parameter terbaik ditemukan, KNN dilatih menggunakan seluruh fitur devel
 
 ## 6. Arsitektur dan Skenario Fine-Tuning
 
+### Peralihan dari Pre-Training ke Fine-Tuning
+
+Basis data berubah pada tahap fine-tuning:
+
+```text
+Pre-Training
+Patch-Based
+256×256
+Two Views
+Tanpa Label
+      ↓
+Best SimCLR Backbone
+      ↓
+Fine-Tuning
+Full-Image-Based
+Resize 224×224
+Menggunakan Label
+Normal / Abnormal
+```
+
 Setelah pre-training selesai, Projection Head dilepaskan dan backbone ResNet50 hasil SimCLR digunakan sebagai inisialisasi model klasifikasi. **CBAM** ditempatkan setelah `layer4` ResNet50 yang menghasilkan **2048 channels**, kemudian diikuti Global Average Pooling dan Fully Connected Layer untuk menghasilkan dua kelas, yaitu Normal dan Abnormal.
 
 Untuk mengetahui seberapa besar perubahan bobot backbone memengaruhi representasi hasil SimCLR, dilakukan tiga skenario fine-tuning. **FT-A** mempertahankan seluruh backbone ResNet50 dalam kondisi frozen dan hanya melatih CBAM serta Fully Connected Layer. **FT-B** mempertahankan `conv1` sampai `layer3` dalam kondisi frozen dan hanya membuka `layer4`, CBAM, serta Fully Connected Layer. **FT-C** merupakan skenario full fine-tuning, yaitu seluruh backbone dibuka dengan discriminative learning rate.
@@ -139,7 +238,35 @@ Sebagai pembanding, digunakan **ResNet50_BASELINE_ImageNet_Dengan_CBAM** yang di
 
 Development set dibagi kembali secara *stratified* menjadi **80% training dan 20% validation** menggunakan `seed=42`. Seluruh skenario menggunakan **batch size 32**, maksimum **50 epoch**, `CrossEntropyLoss`, optimizer **AdamW**, `weight_decay=1e-4`, serta Automatic Mixed Precision (AMP).
 
-Pada **fase warm-up selama 5 epoch**, seluruh backbone ResNet50 dibekukan. Hanya CBAM dan Fully Connected Layer yang dilatih menggunakan `learning_rate=3e-4`. Setelah warm-up, strategi fine-tuning ditentukan melalui argumen command line saat menjalankan `finetune_train.py`. Program tidak akan memulai training apabila strategi tidak diberikan. Strategi yang tersedia adalah `frozen` untuk FT-A, `layer4` untuk FT-B, dan `full` untuk FT-C.
+Pada **fase warm-up selama 5 epoch**, seluruh backbone ResNet50 dibekukan. Hanya CBAM dan Fully Connected Layer yang dilatih menggunakan `learning_rate=3e-4`.
+
+### Tujuan Warm-Up
+
+Fase warm-up digunakan agar CBAM dan FC yang baru ditambahkan dapat beradaptasi terlebih dahulu sebelum sebagian atau seluruh backbone diizinkan berubah.
+
+```text
+Epoch 1–5
+
+ResNet50 Backbone = Frozen
+CBAM              = Train
+FC                = Train
+```
+
+### Pengertian Frozen dan Train
+
+```text
+Frozen
+→ layer tetap digunakan pada forward pass
+→ bobot tidak diperbarui
+→ representasi pretrained dipertahankan
+
+Train
+→ gradient dihitung
+→ optimizer memperbarui bobot
+→ layer beradaptasi terhadap klasifikasi Normal / Abnormal
+```
+
+Setelah warm-up, strategi fine-tuning ditentukan melalui argumen command line saat menjalankan `finetune_train.py`. Program tidak akan memulai training apabila strategi tidak diberikan. Strategi yang tersedia adalah `frozen` untuk FT-A, `layer4` untuk FT-B, dan `full` untuk FT-C.
 
 ### FT-A — Frozen Backbone
 
@@ -163,6 +290,8 @@ Menjalankan FT-A pada Bash:
 ```bash
 python finetune_train.py frozen
 ```
+
+Tujuan FT-A adalah mengukur kualitas transfer representasi SimCLR ketika backbone dipertahankan sepenuhnya tanpa perubahan.
 
 ### FT-B — Partial Fine-Tuning Layer4
 
@@ -188,6 +317,8 @@ Menjalankan FT-B pada Bash:
 ```bash
 python finetune_train.py layer4
 ```
+
+Tujuan FT-B adalah memberikan adaptasi pada fitur tingkat tinggi (`layer4`) sambil mempertahankan fitur dasar dan menengah hasil SimCLR.
 
 ### FT-C — Full Fine-Tuning
 
@@ -216,9 +347,17 @@ FT-C : SimCLR full fine-tuning
 Baseline : ImageNet full fine-tuning + CBAM + FC
 ```
 
+Tujuan FT-C adalah memberikan kemampuan adaptasi maksimum terhadap tugas klasifikasi dengan tetap membatasi perubahan layer awal melalui discriminative learning rate.
+
 ### Baseline — ImageNet + CBAM
 
 Baseline menggunakan backbone **ResNet50 pretrained ImageNet** dengan arsitektur CBAM dan classifier yang sama. Baseline menggunakan fase warm-up selama 5 epoch, kemudian dilanjutkan dengan **full fine-tuning** menggunakan discriminative learning rate yang sama dengan FT-C.
+
+Arsitektur klasifikasi keduanya sama:
+
+```text
+ResNet50 → CBAM → FC
+```
 
 Menjalankan baseline:
 
@@ -241,6 +380,28 @@ Specificity = TN / (TN + FP)
 
 Mapping kelas mengikuti `ImageFolder.class_to_idx` dan tidak diasumsikan secara manual sehingga probabilitas ROC-AUC selalu diambil dari indeks kelas Abnormal yang sebenarnya.
 
+### Alur Pemilihan Model
+
+```text
+Training
+   ↓
+Validation
+   ↓
+Validation ROC-AUC
+   ↓
+Score membaik?
+   ↓
+Simpan Best Checkpoint
+   ↓
+Training selesai
+   ↓
+Load Best Checkpoint
+   ↓
+Independent Test Set
+   ↓
+Final Metrics
+```
+
 ## 9. Grad-CAM
 
 Grad-CAM digunakan setelah fine-tuning untuk menganalisis area citra yang berkontribusi terhadap keputusan model. Grad-CAM tidak diterapkan pada KNN maupun backbone SimCLR mentah karena keduanya tidak memiliki class score dari classifier neural network.
@@ -249,7 +410,44 @@ Target Grad-CAM adalah **blok terakhir `layer4` ResNet50**. Gradien kelas predik
 
 Secara default dipilih **5 citra Normal dan 5 citra Abnormal** dari independent test set. Setiap hasil menampilkan citra asli, heatmap Grad-CAM, overlay, true label, predicted label, dan confidence score. Grad-CAM digunakan sebagai analisis kualitatif, bukan sebagai metrik performa klasifikasi.
 
-## 10. Urutan Eksperimen
+
+## 10. Ringkasan Basis Setiap Tahap
+
+```text
+Preprocessing
+→ Full Image → Patch
+
+Pre-Training SimCLR
+→ Patch-Based
+→ Two Augmented Views
+→ Self-Supervised / Tanpa Label
+
+Evaluasi KNN
+→ Full Image
+→ Frozen SimCLR Features
+→ Non-Parametric Evaluation
+
+Fine-Tuning
+→ Full Image
+→ Supervised / Menggunakan Label
+
+FT-A
+→ Fixed SimCLR Representation
+
+FT-B
+→ Partial Backbone Adaptation
+
+FT-C
+→ Full Backbone Adaptation
+
+Baseline
+→ ImageNet Initialization + Full Fine-Tuning
+
+Grad-CAM
+→ Interpretasi model hasil fine-tuning
+```
+
+## 11. Urutan Eksperimen
 
 Eksperimen dijalankan secara berurutan sebagai berikut:
 
