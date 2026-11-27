@@ -148,7 +148,7 @@ Projection Head
 2048 → 512 → 512 → 128
     ↓
 NT-Xent Loss
-
+```
 
 ## 4. SSL Validation dan Checkpoint
 
